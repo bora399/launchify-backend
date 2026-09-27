@@ -9,6 +9,15 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+string firebaseKeyPath = Path.Combine(AppContext.BaseDirectory, "firebase-key.json");
+
+if (!File.Exists(firebaseKeyPath))
+{
+    throw new FileNotFoundException($"Firebase anahtarý bulunamadý! Aranan yer: {firebaseKeyPath}");
+}
+
+Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", firebaseKeyPath);
+
 // 2. CORS Politikasý (Next.js localhost:3000'den gelen isteklere izin ver)
 builder.Services.AddCors(options =>
 {
