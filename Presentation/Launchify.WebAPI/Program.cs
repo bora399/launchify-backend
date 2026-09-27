@@ -4,6 +4,8 @@ using Masalimiz.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+string firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "firebase-key.json");
+Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", firebaseKeyPath);
 // 1. Controller ve Swagger Ayarlarý
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
