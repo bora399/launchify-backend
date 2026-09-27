@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Launchify.Application\Launchify.Application.csproj" />
+    <ProjectReference Include="..\..\Core\Launchify.Domain\Launchify.Domain.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Launchify.Infrastructure\Launchify.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Launchify.Persistence\Launchify.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

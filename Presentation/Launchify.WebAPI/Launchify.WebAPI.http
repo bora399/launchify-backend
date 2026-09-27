@@ -1,0 +1,6 @@
+@Launchify.WebAPI_HostAddress = http://localhost:5125
+
+GET {{Launchify.WebAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
