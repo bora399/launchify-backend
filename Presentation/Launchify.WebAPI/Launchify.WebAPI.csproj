@@ -9,7 +9,12 @@
   <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
-
+	
+  <ItemGroup>
+	  <None Update="firebase-key.json">
+	   	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+   	  </None>
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Core\Launchify.Application\Launchify.Application.csproj" />
     <ProjectReference Include="..\..\Core\Launchify.Domain\Launchify.Domain.csproj" />

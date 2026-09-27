@@ -18,6 +18,8 @@ namespace Launchify.Domain.Entities
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public bool IsActive { get; set; } = true;
+        public string Slug { get; set; }
+
     }
 
     public class AiPageConfig

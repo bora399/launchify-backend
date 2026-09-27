@@ -4,6 +4,7 @@ using Launchify.Domain.Entities;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Launchify.Infrastructure.Repositories
@@ -25,6 +26,7 @@ namespace Launchify.Infrastructure.Repositories
             var firestoreData = new Dictionary<string, object>
             {
                 { "Id", page.Id.ToString() },
+                { "Slug", page.Slug ?? "" }, // YENİ: URL ismi Firestore'a kaydediliyor
                 { "UserId", page.UserId ?? "" },
                 { "ProductName", page.ProductName ?? "" },
                 { "ThemeType", page.ThemeType ?? "" },
@@ -53,27 +55,49 @@ namespace Launchify.Infrastructure.Repositories
 
             if (snapshot.Exists)
             {
-                var data = snapshot.ToDictionary();
-                var aiDict = data.ContainsKey("AiConfig") && data["AiConfig"] is Dictionary<string, object>
-                    ? (Dictionary<string, object>)data["AiConfig"]
-                    : new Dictionary<string, object>();
-
-                return new LandingPage
-                {
-                    Id = Guid.Parse(data["Id"].ToString()),
-                    ProductName = data.ContainsKey("ProductName") ? data["ProductName"].ToString() : null,
-                    ThemeType = data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : null,
-                    ProductDescription = data.ContainsKey("ProductDescription") ? data["ProductDescription"].ToString() : null,
-                    DemoLink = data.ContainsKey("DemoLink") ? data["DemoLink"].ToString() : null,
-                    AiConfig = new AiPageConfig
-                    {
-                        AiGeneratedHeroTitle = aiDict.ContainsKey("AiGeneratedHeroTitle") ? aiDict["AiGeneratedHeroTitle"].ToString() : null,
-                        AiGeneratedMarketingCopy = aiDict.ContainsKey("AiGeneratedMarketingCopy") ? aiDict["AiGeneratedMarketingCopy"].ToString() : null,
-                        AccentColor = aiDict.ContainsKey("AccentColor") ? aiDict["AccentColor"].ToString() : null
-                    }
-                };
+                return MapSnapshotToLandingPage(snapshot);
             }
             return null;
+        }
+
+        // YENİ: İsme (Slug) göre Firestore'da arama yapan metot
+        public async Task<LandingPage> GetBySlugAsync(string slug)
+        {
+            var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("Slug", slug);
+            var snapshot = await query.GetSnapshotAsync();
+
+            var document = snapshot.Documents.FirstOrDefault();
+
+            if (document != null && document.Exists)
+            {
+                return MapSnapshotToLandingPage(document);
+            }
+            return null;
+        }
+
+        // Kod tekrarını önlemek için Mapping işlemini ortak bir metoda aldık
+        private LandingPage MapSnapshotToLandingPage(DocumentSnapshot snapshot)
+        {
+            var data = snapshot.ToDictionary();
+            var aiDict = data.ContainsKey("AiConfig") && data["AiConfig"] is Dictionary<string, object>
+                ? (Dictionary<string, object>)data["AiConfig"]
+                : new Dictionary<string, object>();
+
+            return new LandingPage
+            {
+                Id = Guid.Parse(data["Id"].ToString()),
+                Slug = data.ContainsKey("Slug") ? data["Slug"].ToString() : null, // YENİ: Eşlemeye dahil edildi
+                ProductName = data.ContainsKey("ProductName") ? data["ProductName"].ToString() : null,
+                ThemeType = data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : null,
+                ProductDescription = data.ContainsKey("ProductDescription") ? data["ProductDescription"].ToString() : null,
+                DemoLink = data.ContainsKey("DemoLink") ? data["DemoLink"].ToString() : null,
+                AiConfig = new AiPageConfig
+                {
+                    AiGeneratedHeroTitle = aiDict.ContainsKey("AiGeneratedHeroTitle") ? aiDict["AiGeneratedHeroTitle"].ToString() : null,
+                    AiGeneratedMarketingCopy = aiDict.ContainsKey("AiGeneratedMarketingCopy") ? aiDict["AiGeneratedMarketingCopy"].ToString() : null,
+                    AccentColor = aiDict.ContainsKey("AccentColor") ? aiDict["AccentColor"].ToString() : null
+                }
+            };
         }
     }
 }
