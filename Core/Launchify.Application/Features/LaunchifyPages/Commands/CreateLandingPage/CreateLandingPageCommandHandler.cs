@@ -1,10 +1,8 @@
 ﻿using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
+using Launchify.Application.Common.Utils;
 using MediatR;
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage
 {
@@ -12,53 +10,40 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
     {
         private readonly ILandingPageRepository _repository;
         private readonly IAiGeneratorService _aiService;
+        private readonly ILogger<CreateLandingPageCommandHandler> _logger;
 
-        public CreateLandingPageCommandHandler(ILandingPageRepository repository, IAiGeneratorService aiService)
+        public CreateLandingPageCommandHandler(
+            ILandingPageRepository repository,
+            IAiGeneratorService aiService,
+            ILogger<CreateLandingPageCommandHandler> logger)
         {
             _repository = repository;
             _aiService = aiService;
+            _logger = logger;
         }
 
         public async Task<CreateLandingResponse> Handle(CreateLandingPageCommand request, CancellationToken cancellationToken)
         {
             try
             {
-                // 1. ADIM: URL için temiz Slug üretimi ("Videocu Uygulaması" -> "videocu-uygulamasi")
-                string generatedSlug = string.Empty;
-                if (!string.IsNullOrEmpty(request.ProductName))
-                {
-                    generatedSlug = request.ProductName.ToLower().Trim()
-                        .Replace(" ", "-")
-                        .Replace("ğ", "g").Replace("ü", "u").Replace("ş", "s")
-                        .Replace("ı", "i").Replace("ö", "o").Replace("ç", "c");
+                _logger.LogInformation("Creating new landing page for product: {ProductName}", request.ProductName);
 
-                    // Özel karakterleri sil ve çift tireleri tek tire yap
-                    generatedSlug = System.Text.RegularExpressions.Regex.Replace(generatedSlug, @"[^a-z0-9\s-]", "");
-                    generatedSlug = System.Text.RegularExpressions.Regex.Replace(generatedSlug, @"\s+", "-").Trim('-');
-                }
-                else
-                {
-                    generatedSlug = Guid.NewGuid().ToString().Substring(0, 8); // İsim yoksa rastgele ver
-                }
+                var generatedSlug = string.IsNullOrWhiteSpace(request.ProductName)
+                    ? Guid.NewGuid().ToString()[..8]
+                    : SlugUtility.GenerateSlug(request.ProductName);
 
-
-                // 2. ADIM: Yapay Zeka'dan temaya ve ürüne uygun pazarlama metinlerini üret
                 var aiConfig = await _aiService.GenerateContentAsync(
                     request.ProductName,
                     request.ThemeType,
                     request.ProductDescription);
 
-
-                // 3. ADIM: Domain Nesnesini Oluştur (YENİ: Slug alanı eklendi)
                 var newPage = new LandingPage
                 {
                     Id = Guid.NewGuid(),
-                    UserId = request.UserId,
                     ProductName = request.ProductName,
-                    Slug = generatedSlug, // Ürettiğimiz URL ismi veritabanı nesnesine ekleniyor
+                    Slug = generatedSlug,
                     ThemeType = request.ThemeType,
                     ContactEmail = request.ContactEmail,
-                    AdminPin = request.AdminPin,
                     DemoLink = request.DemoLink,
                     ProductDescription = request.ProductDescription,
                     AiConfig = aiConfig,
@@ -66,28 +51,24 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                     IsActive = true
                 };
 
-                // 4. ADIM: Firebase'e Kaydet (CQRS Repository üzerinden)
                 await _repository.AddAsync(newPage);
 
+                _logger.LogInformation("Landing page successfully created with ID: {PageId}", newPage.Id);
 
-                // 5. ADIM: Başarılı Sonucu Dön (Next.js'in sayfaya uçabilmesi için ID ve Slug'ı veriyoruz)
                 return new CreateLandingResponse
                 {
                     IsSuccess = true,
-                    Message = "Tebrikler! Ürün tanıtım sayfanız yapay zeka ile başarıyla oluşturuldu.",
+                    Message = "Platform başarıyla oluşturuldu.",
                     GeneratedPageId = newPage.Id.ToString(),
-                    Slug = generatedSlug // YENİ: Slug'ı response'a koyduk ki Controller onu Frontend'e yollasın
+                    Slug = generatedSlug
                 };
             }
             catch (Exception ex)
             {
-                // Hata durumunda frontend'e bilgi ver
                 return new CreateLandingResponse
                 {
                     IsSuccess = false,
-                    Message = $"Sayfa oluşturulurken bir hata oluştu: {ex.Message}",
-                    GeneratedPageId = null,
-                    Slug = null
+                    Message = "Platform oluşturulurken sunucu kaynaklı bir sorun meydana geldi.",
                 };
             }
         }

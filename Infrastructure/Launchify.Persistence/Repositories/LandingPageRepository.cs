@@ -26,12 +26,10 @@ namespace Launchify.Infrastructure.Repositories
             var firestoreData = new Dictionary<string, object>
             {
                 { "Id", page.Id.ToString() },
-                { "Slug", page.Slug ?? "" }, // YENİ: URL ismi Firestore'a kaydediliyor
-                { "UserId", page.UserId ?? "" },
+                { "Slug", page.Slug ?? "" },
                 { "ProductName", page.ProductName ?? "" },
                 { "ThemeType", page.ThemeType ?? "" },
                 { "ContactEmail", page.ContactEmail ?? "" },
-                { "AdminPin", page.AdminPin ?? "" },
                 { "DemoLink", page.DemoLink ?? "" },
                 { "ProductDescription", page.ProductDescription ?? "" },
                 { "CreatedAt", page.CreatedAt.ToUniversalTime() },
@@ -59,8 +57,6 @@ namespace Launchify.Infrastructure.Repositories
             }
             return null;
         }
-
-        // YENİ: İsme (Slug) göre Firestore'da arama yapan metot
         public async Task<LandingPage> GetBySlugAsync(string slug)
         {
             var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("Slug", slug);
@@ -74,8 +70,6 @@ namespace Launchify.Infrastructure.Repositories
             }
             return null;
         }
-
-        // Kod tekrarını önlemek için Mapping işlemini ortak bir metoda aldık
         private LandingPage MapSnapshotToLandingPage(DocumentSnapshot snapshot)
         {
             var data = snapshot.ToDictionary();
