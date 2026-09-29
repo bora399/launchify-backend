@@ -484,3 +484,4 @@ $RECYCLE.BIN/
 *.swp
 
 firebase-key.json
+appsettings.Development.json
