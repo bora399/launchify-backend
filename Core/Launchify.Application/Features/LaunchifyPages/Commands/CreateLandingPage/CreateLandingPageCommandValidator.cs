@@ -1,5 +1,4 @@
-﻿// Application/Features/LaunchifyPages/Commands/CreateLandingPage/CreateLandingPageCommandValidator.cs
-using FluentValidation;
+﻿using FluentValidation;
 using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
 
 public class CreateLandingPageCommandValidator : AbstractValidator<CreateLandingPageCommand>
