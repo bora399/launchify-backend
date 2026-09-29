@@ -8,7 +8,6 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
         public string ProductName { get; set; }
         public string ThemeType { get; set; }
         public string ContactEmail { get; set; }
-        public string AdminPin { get; set; }
         public string DemoLink { get; set; }
         public string ProductDescription { get; set; }
     }
