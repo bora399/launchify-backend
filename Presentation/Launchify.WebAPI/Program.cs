@@ -1,3 +1,6 @@
+using FluentValidation;
+using Launchify.API.Middlewares;
+using Launchify.Application.Common.Behaviors;
 using Launchify.Application.Interfaces;
 using Launchify.Infrastructure.Repositories;
 using Masalimiz.Infrastructure.Services;
@@ -6,11 +9,18 @@ using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 string firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "firebase-key.json");
+if (!File.Exists(firebaseKeyPath))
+{
+    throw new FileNotFoundException($"Firebase anahtarý bulunamadý! Aranan yer: {firebaseKeyPath}");
+}
 Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", firebaseKeyPath);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -20,7 +30,7 @@ builder.Services.AddRateLimiter(options =>
             factory: partition => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
-                PermitLimit = 3, 
+                PermitLimit = 3,
                 Window = TimeSpan.FromHours(1),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
@@ -33,18 +43,11 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-if (!File.Exists(firebaseKeyPath))
-{
-    throw new FileNotFoundException($"Firebase anahtarý bulunamadý! Aranan yer: {firebaseKeyPath}");
-}
-
-Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", firebaseKeyPath);
-
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowNextJs", policy =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") 
+        policy.WithOrigins("https://bora399.github.io", "http://localhost:3000")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -53,9 +56,16 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<ILandingPageRepository, LandingPageRepository>();
 builder.Services.AddScoped<IAiGeneratorService, GeminiAiService>();
 
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblies(AppDomain.CurrentDomain.GetAssemblies()));
+builder.Services.AddValidatorsFromAssemblies(AppDomain.CurrentDomain.GetAssemblies());
+
+builder.Services.AddMediatR(cfg => {
+    cfg.RegisterServicesFromAssemblies(AppDomain.CurrentDomain.GetAssemblies());
+    cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+});
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
@@ -65,11 +75,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseCors("AllowNextJs");
+app.UseCors("AllowFrontend");
 
 app.UseRateLimiter();
 
-app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
