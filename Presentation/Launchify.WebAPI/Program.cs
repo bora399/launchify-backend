@@ -63,6 +63,20 @@ builder.Services.AddMediatR(cfg => {
     cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
 });
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowVercel",
+        policy =>
+        {
+            policy.WithOrigins(
+                    "https://launchify-frontend-theta.vercel.app", 
+                    "http://localhost:3000" 
+                )
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        });
+});
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -74,6 +88,8 @@ if (app.Environment.IsDevelopment())
 }
 
 //app.UseHttpsRedirection();
+
+app.UseCors("AllowVercel");
 
 app.UseCors("AllowFrontend");
 
