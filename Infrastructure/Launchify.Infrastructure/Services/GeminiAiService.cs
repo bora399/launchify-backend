@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 
 namespace Masalimiz.Infrastructure.Services
 {
+    // NOT: Handler (Application katmanı) bu exception'ı yakalayacaksa,
+    // bu sınıfı Launchify.Application/Common/Exceptions altına taşı.
     public class AiServiceUnavailableException : Exception
     {
         public AiServiceUnavailableException(string message, Exception inner = null)
@@ -22,11 +24,12 @@ namespace Masalimiz.Infrastructure.Services
 
         private static readonly HttpClient _httpClient = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(40)
+            Timeout = TimeSpan.FromSeconds(60)
         };
 
-        // Sırayla denenecek modeller (asıl model + yedek). Güncel model adlarını Google'dan kontrol et.
-        private static readonly string[] Models = { "gemini-2.5-flash", "gemini-2.5-flash-lite" };
+        // Sırayla denenecek modeller (asıl model + yedek). Model adları sık değişiyor,
+        // ileride 404 alırsan https://ai.google.dev/gemini-api/docs/models adresinden kontrol et.
+        private static readonly string[] Models = { "gemini-3.8-flash", "gemini-3.5-flash-lite" };
         private const int RetriesPerModel = 3;
 
         public GeminiAiService(IConfiguration configuration)
@@ -69,6 +72,7 @@ namespace Masalimiz.Infrastructure.Services
                 {
                     try
                     {
+                        // İçerik HER denemede yeniden oluşturulmalı (HttpContent tek kullanımlıktır)
                         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
                         using var response = await _httpClient.PostAsync(url, content);
                         var responseString = await response.Content.ReadAsStringAsync();
@@ -83,6 +87,13 @@ namespace Masalimiz.Infrastructure.Services
                                         TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500));
                             await Task.Delay(delay);
                             continue;
+                        }
+
+                        // Model kaldırılmış / erişilemiyor: bu modelde deneme yapma, sıradakine geç
+                        if (response.StatusCode == HttpStatusCode.NotFound)
+                        {
+                            lastError = new Exception($"{model}: 404 - {responseString}");
+                            break;
                         }
 
                         if (!response.IsSuccessStatusCode)
@@ -115,6 +126,7 @@ namespace Masalimiz.Infrastructure.Services
                         lastError = ex;
                     }
                 }
+                // Bu model tükendi, sıradaki modele geç
             }
 
             throw new AiServiceUnavailableException("AI servisi şu an yoğun.", lastError);
