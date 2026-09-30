@@ -5,15 +5,31 @@ using Launchify.Application.Interfaces;
 using Launchify.Infrastructure.Repositories;
 using Masalimiz.Infrastructure.Services;
 using System.Threading.RateLimiting;
+using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
-string firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "firebase-key.json");
-if (!File.Exists(firebaseKeyPath))
+var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_JSON");
+
+if (!string.IsNullOrEmpty(firebaseJson))
 {
-    throw new FileNotFoundException($"Firebase anahtarý bulunamadý! Aranan yer: {firebaseKeyPath}");
+    string tempCredentialsFilePath = Path.GetTempFileName();
+    File.WriteAllText(tempCredentialsFilePath, firebaseJson);
+    Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", tempCredentialsFilePath);
 }
-Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", firebaseKeyPath);
+else
+{
+    string firebaseKeyPath = Path.Combine(Directory.GetCurrentDirectory(), "firebase-key.json");
+    if (File.Exists(firebaseKeyPath))
+    {
+        Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", firebaseKeyPath);
+    }
+    else
+    {
+        Console.WriteLine("UYARI: Firebase kimliði bulunamadý! Veritabaný iþlemleri baþarýsýz olabilir.");
+    }
+}
+// ---------------------------------------------------------
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -43,13 +59,17 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
+// Tüm frontend platformlarýný tek bir CORS politikasýnda birleþtirdik
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins("https://bora399.github.io", "http://localhost:3000")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.WithOrigins(
+                "https://launchify-frontend-theta.vercel.app",
+                "http://localhost:3000"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
@@ -63,20 +83,6 @@ builder.Services.AddMediatR(cfg => {
     cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
 });
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowVercel",
-        policy =>
-        {
-            policy.WithOrigins(
-                    "https://launchify-frontend-theta.vercel.app", 
-                    "http://localhost:3000" 
-                )
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-        });
-});
-
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -87,11 +93,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-//app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); 
 
-app.UseCors("AllowVercel");
-
-app.UseCors("AllowFrontend");
+app.UseCors("AllowAll"); 
 
 app.UseRateLimiter();
 
