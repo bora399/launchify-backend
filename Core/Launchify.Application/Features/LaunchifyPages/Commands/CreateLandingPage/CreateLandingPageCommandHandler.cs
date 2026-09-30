@@ -65,10 +65,13 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
             }
             catch (Exception ex)
             {
+                // GERÇEK HATAYI RENDER LOGLARINA BASTIĞIMIZ SATIR:
+                Console.WriteLine($"\n--- KRİTİK HATA BAŞLANGICI ---\n{ex.ToString()}\n--- KRİTİK HATA BİTİŞİ ---\n");
+
                 return new CreateLandingResponse
                 {
                     IsSuccess = false,
-                    Message = "Platform oluşturulurken sunucu kaynaklı bir sorun meydana geldi.",
+                    Message = "Platform oluşturulurken sunucu kaynaklı bir sorun meydana geldi."
                 };
             }
         }
