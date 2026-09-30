@@ -2,6 +2,7 @@
 using Launchify.Domain.Entities;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -9,10 +10,24 @@ using System.Threading.Tasks;
 
 namespace Masalimiz.Infrastructure.Services
 {
+    public class AiServiceUnavailableException : Exception
+    {
+        public AiServiceUnavailableException(string message, Exception inner = null)
+            : base(message, inner) { }
+    }
+
     public class GeminiAiService : IAiGeneratorService
     {
         private readonly string _apiKey;
-        private static readonly HttpClient _httpClient = new HttpClient();
+
+        private static readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(40)
+        };
+
+        // Sırayla denenecek modeller (asıl model + yedek). Güncel model adlarını Google'dan kontrol et.
+        private static readonly string[] Models = { "gemini-2.5-flash", "gemini-2.5-flash-lite" };
+        private const int RetriesPerModel = 3;
 
         public GeminiAiService(IConfiguration configuration)
         {
@@ -39,59 +54,70 @@ namespace Masalimiz.Infrastructure.Services
                 contents = new[]
                 {
                     new { parts = new[] { new { text = prompt } } }
-                }
+                },
+                generationConfig = new { responseMimeType = "application/json" }
             };
 
-            var jsonContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+            string payload = JsonSerializer.Serialize(requestBody);
+            Exception lastError = null;
 
-            string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={_apiKey.Trim()}";
-            
-            int maxRetries = 3;
-            int delayMilliseconds = 2000;
-
-            for (int i = 0; i < maxRetries; i++)
+            foreach (var model in Models)
             {
-                try
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_apiKey.Trim()}";
+
+                for (int attempt = 0; attempt < RetriesPerModel; attempt++)
                 {
-                    var response = await _httpClient.PostAsync(url, jsonContent);
-                    var responseString = await response.Content.ReadAsStringAsync();
-
-                    if ((response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable || response.StatusCode == System.Net.HttpStatusCode.TooManyRequests) && i < maxRetries - 1)
+                    try
                     {
-                        await Task.Delay(delayMilliseconds * (i + 1));
-                        continue;
-                    }
+                        using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+                        using var response = await _httpClient.PostAsync(url, content);
+                        var responseString = await response.Content.ReadAsStringAsync();
 
-                    if (!response.IsSuccessStatusCode)
+                        if (response.StatusCode == HttpStatusCode.ServiceUnavailable ||
+                            response.StatusCode == HttpStatusCode.TooManyRequests)
+                        {
+                            lastError = new Exception($"{model}: {(int)response.StatusCode} - {responseString}");
+
+                            // Exponential backoff + jitter: ~1s, 2s, 4s
+                            var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)) +
+                                        TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500));
+                            await Task.Delay(delay);
+                            continue;
+                        }
+
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            throw new Exception($"Google API Hatası: {response.StatusCode} - {responseString}");
+                        }
+
+                        using var jsonDoc = JsonDocument.Parse(responseString);
+                        var textResult = jsonDoc.RootElement
+                            .GetProperty("candidates")[0]
+                            .GetProperty("content")
+                            .GetProperty("parts")[0]
+                            .GetProperty("text").GetString();
+
+                        if (!string.IsNullOrEmpty(textResult))
+                        {
+                            textResult = textResult.Replace("```json", "").Replace("```", "").Trim();
+                        }
+
+                        return JsonSerializer.Deserialize<AiPageConfig>(
+                            textResult,
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    }
+                    catch (TaskCanceledException ex) // timeout
                     {
-                        throw new Exception($"Google API Hatası: {response.StatusCode} - {responseString}");
+                        lastError = ex;
                     }
-
-                    using var jsonDoc = JsonDocument.Parse(responseString);
-                    var textResult = jsonDoc.RootElement
-                        .GetProperty("candidates")[0]
-                        .GetProperty("content")
-                        .GetProperty("parts")[0]
-                        .GetProperty("text").GetString();
-
-                    if (!string.IsNullOrEmpty(textResult))
+                    catch (HttpRequestException ex)  // ağ hatası
                     {
-                        textResult = textResult.Replace("```json", "").Replace("```", "").Trim();
+                        lastError = ex;
                     }
-
-                    return JsonSerializer.Deserialize<AiPageConfig>(textResult, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                }
-                catch (Exception ex) when (i < maxRetries - 1 && ex.Message.Contains("503"))
-                {
-                    await Task.Delay(delayMilliseconds * (i + 1));
-                }
-                catch (Exception ex) when (i == maxRetries - 1)
-                {
-                    throw new Exception($"Gemini SDK Hatası: Maksimum deneme sayısına ulaşıldı. Detay: {ex.Message}");
                 }
             }
 
-            return null;
+            throw new AiServiceUnavailableException("AI servisi şu an yoğun.", lastError);
         }
     }
 }
