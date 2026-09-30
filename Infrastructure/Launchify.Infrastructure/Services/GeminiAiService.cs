@@ -21,59 +21,77 @@ namespace Masalimiz.Infrastructure.Services
 
         public async Task<AiPageConfig> GenerateContentAsync(string productName, string themeType, string productDescription)
         {
-            try
+            string prompt = $@"
+                Sen uzman bir ürün pazarlama stratejisti ve metin yazarısın (Copywriter). Yeni bir yazılım/ürün için dönüşüm odaklı (conversion-optimized) bir açılış sayfası (Landing Page) içeriği üreteceksin.
+                Ürün / Girişim Adı: {productName} 
+                Marka Tonu: {(themeType == "modern" ? "Modern, yenilikçi ve teknolojik (Startup tarzı)" : "Kurumsal, güvenilir ve ciddi (B2B tarzı)")}
+                Ürünün Özellikleri / Amacı: {productDescription}
+
+                SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya ekstra metin ekleme:
+                {{
+                ""AiGeneratedHeroTitle"": ""Ürünün ana değer önerisini (value proposition) anlatan kısa ve vurucu slogan"",
+                ""AiGeneratedMarketingCopy"": ""Ürünün özelliklerini müşteriye fayda sağlayacak şekilde anlatan, yaklaşık 40-50 kelimelik profesyonel pazarlama metni."",
+                ""AccentColor"": ""{(themeType == "modern" ? "#2563EB" : "#0F172A")}""
+                }}";
+
+            var requestBody = new
             {
-                string prompt = $@"
-                                Sen uzman bir ürün pazarlama stratejisti ve metin yazarısın (Copywriter). Yeni bir yazılım/ürün için dönüşüm odaklı (conversion-optimized) bir açılış sayfası (Landing Page) içeriği üreteceksin.
-                                Ürün / Girişim Adı: {productName} 
-                                Marka Tonu: {(themeType == "modern" ? "Modern, yenilikçi ve teknolojik (Startup tarzı)" : "Kurumsal, güvenilir ve ciddi (B2B tarzı)")}
-                                Ürünün Özellikleri / Amacı: {productDescription}
-
-                                SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya ekstra metin ekleme:
-                                {{
-                                ""AiGeneratedHeroTitle"": ""Ürünün ana değer önerisini (value proposition) anlatan kısa ve vurucu slogan"",
-                                ""AiGeneratedMarketingCopy"": ""Ürünün özelliklerini müşteriye fayda sağlayacak şekilde anlatan, yaklaşık 40-50 kelimelik profesyonel pazarlama metni."",
-                                ""AccentColor"": ""{(themeType == "modern" ? "#2563EB" : "#0F172A")}""
-                                }}";
-
-                var requestBody = new
+                contents = new[]
                 {
-                    contents = new[]
+                    new { parts = new[] { new { text = prompt } } }
+                }
+            };
+
+            var jsonContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+            string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={_apiKey.Trim()}";
+            
+            int maxRetries = 3;
+            int delayMilliseconds = 2000;
+
+            for (int i = 0; i < maxRetries; i++)
+            {
+                try
+                {
+                    var response = await _httpClient.PostAsync(url, jsonContent);
+                    var responseString = await response.Content.ReadAsStringAsync();
+
+                    if ((response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable || response.StatusCode == System.Net.HttpStatusCode.TooManyRequests) && i < maxRetries - 1)
                     {
-                        new { parts = new[] { new { text = prompt } } }
+                        await Task.Delay(delayMilliseconds * (i + 1));
+                        continue;
                     }
-                };
 
-                var jsonContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"Google API Hatası: {response.StatusCode} - {responseString}");
+                    }
 
-                string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={_apiKey.Trim()}";
+                    using var jsonDoc = JsonDocument.Parse(responseString);
+                    var textResult = jsonDoc.RootElement
+                        .GetProperty("candidates")[0]
+                        .GetProperty("content")
+                        .GetProperty("parts")[0]
+                        .GetProperty("text").GetString();
 
-                var response = await _httpClient.PostAsync(url, jsonContent);
-                var responseString = await response.Content.ReadAsStringAsync();
+                    if (!string.IsNullOrEmpty(textResult))
+                    {
+                        textResult = textResult.Replace("```json", "").Replace("```", "").Trim();
+                    }
 
-                if (!response.IsSuccessStatusCode)
-                {
-                   throw new Exception($"Google API Hatası: {response.StatusCode} - {responseString}");
+                    return JsonSerializer.Deserialize<AiPageConfig>(textResult, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 }
-
-                using var jsonDoc = JsonDocument.Parse(responseString);
-                var textResult = jsonDoc.RootElement
-                    .GetProperty("candidates")[0]
-                    .GetProperty("content")
-                    .GetProperty("parts")[0]
-                    .GetProperty("text").GetString();
-
-                if (!string.IsNullOrEmpty(textResult))
+                catch (Exception ex) when (i < maxRetries - 1 && ex.Message.Contains("503"))
                 {
-                    textResult = textResult.Replace("```json", "").Replace("```", "").Trim();
+                    await Task.Delay(delayMilliseconds * (i + 1));
                 }
-
-                return JsonSerializer.Deserialize<AiPageConfig>(textResult, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                catch (Exception ex) when (i == maxRetries - 1)
+                {
+                    throw new Exception($"Gemini SDK Hatası: Maksimum deneme sayısına ulaşıldı. Detay: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                throw new Exception($"Gemini SDK Hatası: {ex.Message}");
-            } 
+
+            return null;
         }
     }
 }
