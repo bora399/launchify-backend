@@ -48,7 +48,7 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                     ProductDescription = request.ProductDescription,
                     AiConfig = aiConfig,
                     CreatedAt = DateTime.UtcNow,
-                    TemplateType = request.TemplateType,
+                    TemplateType = request.TemplateType ?? request.ThemeType,
                     IsActive = true
                 };
 

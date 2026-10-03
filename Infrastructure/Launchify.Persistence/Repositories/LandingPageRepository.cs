@@ -80,11 +80,15 @@ namespace Launchify.Infrastructure.Repositories
             return new LandingPage
             {
                 Id = Guid.Parse(data["Id"].ToString()),
-                Slug = data.ContainsKey("Slug") ? data["Slug"].ToString() : null, // YENİ: Eşlemeye dahil edildi
+                Slug = data.ContainsKey("Slug") ? data["Slug"].ToString() : null,
                 ProductName = data.ContainsKey("ProductName") ? data["ProductName"].ToString() : null,
                 ThemeType = data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : null,
                 ProductDescription = data.ContainsKey("ProductDescription") ? data["ProductDescription"].ToString() : null,
                 DemoLink = data.ContainsKey("DemoLink") ? data["DemoLink"].ToString() : null,
+
+                TemplateType = data.ContainsKey("TemplateType") ? data["TemplateType"].ToString() :
+                              (data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : "aurora"),
+
                 AiConfig = new AiPageConfig
                 {
                     AiGeneratedHeroTitle = aiDict.ContainsKey("AiGeneratedHeroTitle") ? aiDict["AiGeneratedHeroTitle"].ToString() : null,
