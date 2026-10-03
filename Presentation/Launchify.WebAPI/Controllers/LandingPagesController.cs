@@ -51,7 +51,8 @@ namespace Launchify.WebAPI.Controllers
                 aiGeneratedHeroTitle = pageData.AiConfig?.AiGeneratedHeroTitle,
                 aiGeneratedMarketingCopy = pageData.AiConfig?.AiGeneratedMarketingCopy,
                 accentColor = pageData.AiConfig?.AccentColor,
-                demoLink = pageData.DemoLink
+                demoLink = pageData.DemoLink,
+                templateType = pageData.TemplateType
             });
         }
     }
