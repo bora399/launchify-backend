@@ -24,24 +24,27 @@ namespace Launchify.Infrastructure.Repositories
             var docRef = _firestoreDb.Collection("LandingPages").Document(page.Id.ToString());
 
             var firestoreData = new Dictionary<string, object>
+    {
+        { "Id", page.Id.ToString() },
+        { "Slug", page.Slug ?? "" },
+        { "ProductName", page.ProductName ?? "" },
+        { "ThemeType", page.ThemeType ?? "" },
+        
+        { "TemplateType", page.TemplateType ?? page.ThemeType ?? "aurora" },
+
+        { "ContactEmail", page.ContactEmail ?? "" },
+        { "DemoLink", page.DemoLink ?? "" },
+        { "ProductDescription", page.ProductDescription ?? "" },
+        { "CreatedAt", page.CreatedAt.ToUniversalTime() },
+        { "IsActive", page.IsActive },
+        { "AiConfig", new Dictionary<string, object>
             {
-                { "Id", page.Id.ToString() },
-                { "Slug", page.Slug ?? "" },
-                { "ProductName", page.ProductName ?? "" },
-                { "ThemeType", page.ThemeType ?? "" },
-                { "ContactEmail", page.ContactEmail ?? "" },
-                { "DemoLink", page.DemoLink ?? "" },
-                { "ProductDescription", page.ProductDescription ?? "" },
-                { "CreatedAt", page.CreatedAt.ToUniversalTime() },
-                { "IsActive", page.IsActive },
-                { "AiConfig", new Dictionary<string, object>
-                    {
-                        { "AiGeneratedHeroTitle", page.AiConfig?.AiGeneratedHeroTitle ?? "" },
-                        { "AiGeneratedMarketingCopy", page.AiConfig?.AiGeneratedMarketingCopy ?? "" },
-                        { "AccentColor", page.AiConfig?.AccentColor ?? "" }
-                    }
+                { "AiGeneratedHeroTitle", page.AiConfig?.AiGeneratedHeroTitle ?? "" },
+                { "AiGeneratedMarketingCopy", page.AiConfig?.AiGeneratedMarketingCopy ?? "" },
+                { "AccentColor", page.AiConfig?.AccentColor ?? "" }
                 }
-            };
+            }
+        };
 
             await docRef.SetAsync(firestoreData);
         }
