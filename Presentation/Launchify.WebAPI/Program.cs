@@ -29,7 +29,6 @@ else
         Console.WriteLine("UYARI: Firebase kimliði bulunamadý! Veritabaný iþlemleri baþarýsýz olabilir.");
     }
 }
-// ---------------------------------------------------------
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -59,7 +58,6 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-// Tüm frontend platformlarýný tek bir CORS politikasýnda birleþtirdik
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>

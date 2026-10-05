@@ -42,7 +42,6 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                     Id = Guid.NewGuid(),
                     ProductName = request.ProductName,
                     Slug = generatedSlug,
-                    ThemeType = request.ThemeType,
                     ContactEmail = request.ContactEmail,
                     DemoLink = request.DemoLink,
                     ProductDescription = request.ProductDescription,
@@ -66,7 +65,6 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
             }
             catch (Exception ex)
             {
-                // GERÇEK HATAYI RENDER LOGLARINA BASTIĞIMIZ SATIR:
                 Console.WriteLine($"\n--- KRİTİK HATA BAŞLANGICI ---\n{ex.ToString()}\n--- KRİTİK HATA BİTİŞİ ---\n");
 
                 return new CreateLandingResponse

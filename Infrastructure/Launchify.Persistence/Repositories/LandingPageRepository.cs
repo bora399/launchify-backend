@@ -28,9 +28,8 @@ namespace Launchify.Infrastructure.Repositories
         { "Id", page.Id.ToString() },
         { "Slug", page.Slug ?? "" },
         { "ProductName", page.ProductName ?? "" },
-        { "ThemeType", page.ThemeType ?? "" },
         
-        { "TemplateType", page.TemplateType ?? page.ThemeType ?? "aurora" },
+        { "TemplateType", page.TemplateType ?? "aurora" },
 
         { "ContactEmail", page.ContactEmail ?? "" },
         { "DemoLink", page.DemoLink ?? "" },
@@ -85,7 +84,6 @@ namespace Launchify.Infrastructure.Repositories
                 Id = Guid.Parse(data["Id"].ToString()),
                 Slug = data.ContainsKey("Slug") ? data["Slug"].ToString() : null,
                 ProductName = data.ContainsKey("ProductName") ? data["ProductName"].ToString() : null,
-                ThemeType = data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : null,
                 ProductDescription = data.ContainsKey("ProductDescription") ? data["ProductDescription"].ToString() : null,
                 DemoLink = data.ContainsKey("DemoLink") ? data["DemoLink"].ToString() : null,
 
