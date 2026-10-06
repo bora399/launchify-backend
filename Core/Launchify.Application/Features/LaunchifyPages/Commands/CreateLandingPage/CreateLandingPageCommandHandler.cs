@@ -29,6 +29,15 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(request.UserId))
+                {
+                    return new CreateLandingResponse
+                    {
+                        IsSuccess = false,
+                        Message = "Güvenlik İhlali: Proje oluşturmak için sisteme giriş yapmış olmanız gerekmektedir."
+                    };
+                }
+
                 bool creditDeducted = await _userRepository.DeductCreditAsync(request.UserId);
                 if (!creditDeducted)
                 {
