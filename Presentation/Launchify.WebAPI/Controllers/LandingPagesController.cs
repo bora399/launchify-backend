@@ -24,20 +24,29 @@ namespace Launchify.WebAPI.Controllers
         public async Task<IActionResult> CreateLandingPage([FromBody] CreateLandingPageCommand command)
         {
             var response = await _mediator.Send(command);
-
             if (response.IsSuccess)
             {
                 return Ok(new { id = response.GeneratedPageId, slug = response.Slug, message = response.Message });
             }
-
             return BadRequest(new { message = response.Message });
+        }
+
+        [HttpGet("user/{userId}")]
+        public async Task<IActionResult> GetUserProjects(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+            {
+                return BadRequest(new { message = "UserId parametresi gereklidir." });
+            }
+
+            var projects = await _repository.GetByUserIdAsync(userId);
+            return Ok(projects);
         }
 
         [HttpGet("{slug}")]
         public async Task<IActionResult> GetLandingPageBySlug(string slug)
         {
             var pageData = await _repository.GetBySlugAsync(slug);
-
             if (pageData == null)
             {
                 return NotFound(new { message = "Bu isme ait bir platform bulunamadı." });
