@@ -3,9 +3,11 @@ using Launchify.API.Middlewares;
 using Launchify.Application.Common.Behaviors;
 using Launchify.Application.Interfaces;
 using Launchify.Infrastructure.Repositories;
+using Launchify.Persistence.Repositories;
 using Masalimiz.Infrastructure.Services;
-using System.Threading.RateLimiting;
+using Google.Cloud.Firestore;
 using System.IO;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +31,9 @@ else
         Console.WriteLine("UYARI: Firebase kimliði bulunamadý! Veritabaný iþlemleri baþarýsýz olabilir.");
     }
 }
+
+var projectId = builder.Configuration["Firebase:ProjectId"] ?? "masalimiz-2d8a4"
+builder.Services.AddSingleton(provider => FirestoreDb.Create(projectId));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -72,6 +77,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<ILandingPageRepository, LandingPageRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAiGeneratorService, GeminiAiService>();
 
 builder.Services.AddValidatorsFromAssemblies(AppDomain.CurrentDomain.GetAssemblies());
@@ -91,11 +97,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// app.UseHttpsRedirection(); 
-
-app.UseCors("AllowAll"); 
+app.UseCors("AllowAll");
 
 app.UseRateLimiter();
+
+app.UseAuthorization();
 
 app.MapControllers();
 
