@@ -32,7 +32,7 @@ else
     }
 }
 
-var projectId = builder.Configuration["Firebase:ProjectId"] ?? "masalimiz-2d8a4"
+var projectId = builder.Configuration["Firebase:ProjectId"] ?? "masalimiz-2d8a4";
 builder.Services.AddSingleton(provider => FirestoreDb.Create(projectId));
 
 builder.Services.AddControllers();
