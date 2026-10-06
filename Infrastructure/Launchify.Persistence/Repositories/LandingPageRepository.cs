@@ -24,26 +24,25 @@ namespace Launchify.Infrastructure.Repositories
             var docRef = _firestoreDb.Collection("LandingPages").Document(page.Id.ToString());
 
             var firestoreData = new Dictionary<string, object>
-    {
-        { "Id", page.Id.ToString() },
-        { "Slug", page.Slug ?? "" },
-        { "ProductName", page.ProductName ?? "" },
-        
-        { "TemplateType", page.TemplateType ?? "aurora" },
-
-        { "ContactEmail", page.ContactEmail ?? "" },
-        { "DemoLink", page.DemoLink ?? "" },
-        { "ProductDescription", page.ProductDescription ?? "" },
-        { "CreatedAt", page.CreatedAt.ToUniversalTime() },
-        { "IsActive", page.IsActive },
-        { "AiConfig", new Dictionary<string, object>
             {
-                { "AiGeneratedHeroTitle", page.AiConfig?.AiGeneratedHeroTitle ?? "" },
-                { "AiGeneratedMarketingCopy", page.AiConfig?.AiGeneratedMarketingCopy ?? "" },
-                { "AccentColor", page.AiConfig?.AccentColor ?? "" }
+                { "Id", page.Id.ToString() },
+                { "UserId", page.UserId ?? "" },
+                { "Slug", page.Slug ?? "" },
+                { "ProductName", page.ProductName ?? "" },
+                { "TemplateType", page.TemplateType ?? "aurora" },
+                { "ContactEmail", page.ContactEmail ?? "" },
+                { "DemoLink", page.DemoLink ?? "" },
+                { "ProductDescription", page.ProductDescription ?? "" },
+                { "CreatedAt", page.CreatedAt.ToUniversalTime() },
+                { "IsActive", page.IsActive },
+                { "AiConfig", new Dictionary<string, object>
+                    {
+                        { "AiGeneratedHeroTitle", page.AiConfig?.AiGeneratedHeroTitle ?? "" },
+                        { "AiGeneratedMarketingCopy", page.AiConfig?.AiGeneratedMarketingCopy ?? "" },
+                        { "AccentColor", page.AiConfig?.AccentColor ?? "" }
+                    }
                 }
-            }
-        };
+            };
 
             await docRef.SetAsync(firestoreData);
         }
@@ -59,6 +58,7 @@ namespace Launchify.Infrastructure.Repositories
             }
             return null;
         }
+
         public async Task<LandingPage> GetBySlugAsync(string slug)
         {
             var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("Slug", slug);
@@ -72,6 +72,24 @@ namespace Launchify.Infrastructure.Repositories
             }
             return null;
         }
+        public async Task<IEnumerable<LandingPage>> GetByUserIdAsync(string userId)
+        {
+            var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("UserId", userId);
+            var snapshot = await query.GetSnapshotAsync();
+
+            var landingPages = new List<LandingPage>();
+
+            foreach (var document in snapshot.Documents)
+            {
+                if (document.Exists)
+                {
+                    landingPages.Add(MapSnapshotToLandingPage(document));
+                }
+            }
+
+            return landingPages;
+        }
+
         private LandingPage MapSnapshotToLandingPage(DocumentSnapshot snapshot)
         {
             var data = snapshot.ToDictionary();
@@ -82,9 +100,11 @@ namespace Launchify.Infrastructure.Repositories
             return new LandingPage
             {
                 Id = Guid.Parse(data["Id"].ToString()),
+                UserId = data.ContainsKey("UserId") ? data["UserId"].ToString() : null, // EKLENDİ
                 Slug = data.ContainsKey("Slug") ? data["Slug"].ToString() : null,
                 ProductName = data.ContainsKey("ProductName") ? data["ProductName"].ToString() : null,
                 ProductDescription = data.ContainsKey("ProductDescription") ? data["ProductDescription"].ToString() : null,
+                ContactEmail = data.ContainsKey("ContactEmail") ? data["ContactEmail"].ToString() : null, // MAPLEMEYE EKLENDİ
                 DemoLink = data.ContainsKey("DemoLink") ? data["DemoLink"].ToString() : null,
 
                 TemplateType = data.ContainsKey("TemplateType") ? data["TemplateType"].ToString() :

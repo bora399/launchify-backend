@@ -5,6 +5,7 @@ namespace Launchify.Domain.Entities
 {
     public class LandingPage : BaseEntity
     {
+        public string UserId { get; set; }
         public string ProductName { get; set; }
         public string ContactEmail { get; set; }
         public string DemoLink { get; set; }

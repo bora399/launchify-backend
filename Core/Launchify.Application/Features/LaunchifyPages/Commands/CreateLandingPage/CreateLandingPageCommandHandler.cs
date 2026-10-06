@@ -1,6 +1,6 @@
-﻿using Launchify.Application.Interfaces;
+﻿using Launchify.Application.Common.Utils;
+using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
-using Launchify.Application.Common.Utils;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -10,15 +10,18 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
     {
         private readonly ILandingPageRepository _repository;
         private readonly IAiGeneratorService _aiService;
+        private readonly IUserRepository _userRepository; // 1. EKLENDİ
         private readonly ILogger<CreateLandingPageCommandHandler> _logger;
 
         public CreateLandingPageCommandHandler(
             ILandingPageRepository repository,
             IAiGeneratorService aiService,
+            IUserRepository userRepository, // 1. EKLENDİ
             ILogger<CreateLandingPageCommandHandler> logger)
         {
             _repository = repository;
             _aiService = aiService;
+            _userRepository = userRepository; // 1. EKLENDİ
             _logger = logger;
         }
 
@@ -26,6 +29,12 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
         {
             try
             {
+                bool creditDeducted = await _userRepository.DeductCreditAsync(request.UserId);
+                if (!creditDeducted)
+                {
+                    return new CreateLandingResponse { IsSuccess = false, Message = "Yeterli proje oluşturma krediniz bulunmuyor." };
+                }
+
                 _logger.LogInformation("Creating new landing page for product: {ProductName}", request.ProductName);
 
                 var generatedSlug = string.IsNullOrWhiteSpace(request.ProductName)
@@ -40,6 +49,7 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                 var newPage = new LandingPage
                 {
                     Id = Guid.NewGuid(),
+                    UserId = request.UserId, // 3. EKLENDİ: Projeyi kullanıcıya bağlıyoruz
                     ProductName = request.ProductName,
                     Slug = generatedSlug,
                     ContactEmail = request.ContactEmail,

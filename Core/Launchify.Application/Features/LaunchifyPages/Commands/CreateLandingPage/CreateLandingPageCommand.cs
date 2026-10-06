@@ -5,6 +5,7 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
 {
     public class CreateLandingPageCommand : IRequest<CreateLandingResponse>
     {
+        public string UserId { get; set; }
         public string ProductName { get; set; }
         public string ThemeType { get; set; }
         public string ContactEmail { get; set; }
