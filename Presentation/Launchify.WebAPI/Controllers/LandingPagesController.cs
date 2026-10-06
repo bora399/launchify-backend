@@ -1,4 +1,5 @@
 ﻿using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
+using Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPage;
 using Launchify.Application.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -41,6 +42,17 @@ namespace Launchify.WebAPI.Controllers
 
             var projects = await _repository.GetByUserIdAsync(userId);
             return Ok(projects);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteLandingPage(string id, [FromQuery] string userId)
+        {
+            var command = new DeleteLandingPageCommand { PageId = id, UserId = userId };
+            var response = await _mediator.Send(command);
+
+            if (response.IsSuccess) return Ok(response);
+
+            return BadRequest(new { message = response.Message });
         }
 
         [HttpGet("{slug}")]

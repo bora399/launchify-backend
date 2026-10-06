@@ -9,5 +9,6 @@ namespace Launchify.Application.Interfaces
         Task<LandingPage> GetByIdAsync(string id);
         Task<LandingPage> GetBySlugAsync(string slug);
         Task<IEnumerable<LandingPage>> GetByUserIdAsync(string userId);
+        Task DeleteAsync(string id);
     }
 }

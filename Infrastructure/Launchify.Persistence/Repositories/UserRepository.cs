@@ -72,5 +72,18 @@ namespace Launchify.Persistence.Repositories
             await docRef.UpdateAsync("RemainingCredits", currentCredits - 1);
             return true;
         }
+
+        public async Task<bool> RefundCreditAsync(string id)
+        {
+            var docRef = _firestoreDb.Collection("Users").Document(id);
+            var snapshot = await docRef.GetSnapshotAsync();
+
+            if (!snapshot.Exists) return false;
+
+            int currentCredits = snapshot.GetValue<int>("RemainingCredits");
+
+            await docRef.UpdateAsync("RemainingCredits", currentCredits + 1);
+            return true;
+        }
     }
 }

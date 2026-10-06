@@ -89,6 +89,11 @@ namespace Launchify.Infrastructure.Repositories
 
             return landingPages;
         }
+        public async Task DeleteAsync(string id)
+        {
+            var docRef = _firestoreDb.Collection("LandingPages").Document(id);
+            await docRef.DeleteAsync();
+        }
 
         private LandingPage MapSnapshotToLandingPage(DocumentSnapshot snapshot)
         {
