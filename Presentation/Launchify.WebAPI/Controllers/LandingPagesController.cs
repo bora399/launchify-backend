@@ -1,13 +1,12 @@
-﻿using Launchify.Application.DTOs;
-using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
+﻿using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
 using Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPage;
 using Launchify.Application.Interfaces;
-using Launchify.Infrastructure.Services;
 using LaunchifyBackend.Hubs;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using System.Threading.Tasks;
 
 namespace Launchify.WebAPI.Controllers
 {
@@ -17,45 +16,37 @@ namespace Launchify.WebAPI.Controllers
     {
         private readonly IMediator _mediator;
         private readonly ILandingPageRepository _repository;
-
-        private readonly GeminiAiService _aiService;
         private readonly IHubContext<GenerationHub> _hubContext;
 
-        public LandingPagesController(IMediator mediator, ILandingPageRepository repository, GeminiAiService aiService, IHubContext<GenerationHub> hubContext)
+        public LandingPagesController(
+            IMediator mediator,
+            ILandingPageRepository repository,
+            IHubContext<GenerationHub> hubContext)
         {
             _mediator = mediator;
             _repository = repository;
-            _aiService = aiService;
             _hubContext = hubContext;
-        }
-
-        [HttpPost("generate")]
-        public IActionResult Generate([FromBody] GeneratePageRequest request)
-        {
-            _ = Task.Run(async () =>
-            {
-                await _aiService.GenerateContentAsync(
-                    request.ProductName,
-                    request.ThemeType,
-                    request.ProductDescription,
-                    async (logMessage) =>
-                    {
-                        await _hubContext.Clients.Client(request.ConnectionId).SendAsync("ReceiveLog", logMessage);
-                    });
-            });
-
-            return Ok(new { message = "Süreç başlatıldı, loglar SignalR üzerinden akıyor..." });
         }
 
         [HttpPost("create")]
         [EnableRateLimiting("AiCreationLimit")]
         public async Task<IActionResult> CreateLandingPage([FromBody] CreateLandingPageCommand command)
         {
+            command.LogCallback = async (logMessage) =>
+            {
+                if (!string.IsNullOrEmpty(command.ConnectionId))
+                {
+                    await _hubContext.Clients.Client(command.ConnectionId).SendAsync("ReceiveLog", logMessage);
+                }
+            };
+
             var response = await _mediator.Send(command);
+
             if (response.IsSuccess)
             {
                 return Ok(new { id = response.GeneratedPageId, slug = response.Slug, message = response.Message });
             }
+
             return BadRequest(new { message = response.Message });
         }
 

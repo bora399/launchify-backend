@@ -11,7 +11,12 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
         public string ContactEmail { get; set; }
         public string DemoLink { get; set; }
         public string ProductDescription { get; set; }
-        public string TemplateType { get; set; } 
+        public string TemplateType { get; set; }
+        //signalr
+        public string ConnectionId { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Func<string, Task> LogCallback { get; set; }
     }
 
     public class CreateLandingResponse

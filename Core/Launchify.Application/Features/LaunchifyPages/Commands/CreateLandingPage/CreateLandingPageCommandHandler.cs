@@ -10,18 +10,18 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
     {
         private readonly ILandingPageRepository _repository;
         private readonly IAiGeneratorService _aiService;
-        private readonly IUserRepository _userRepository; // 1. EKLENDİ
+        private readonly IUserRepository _userRepository;
         private readonly ILogger<CreateLandingPageCommandHandler> _logger;
 
         public CreateLandingPageCommandHandler(
             ILandingPageRepository repository,
             IAiGeneratorService aiService,
-            IUserRepository userRepository, // 1. EKLENDİ
+            IUserRepository userRepository,
             ILogger<CreateLandingPageCommandHandler> logger)
         {
             _repository = repository;
             _aiService = aiService;
-            _userRepository = userRepository; // 1. EKLENDİ
+            _userRepository = userRepository;
             _logger = logger;
         }
 
@@ -53,12 +53,13 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                 var aiConfig = await _aiService.GenerateContentAsync(
                     request.ProductName,
                     request.ThemeType,
-                    request.ProductDescription);
-
+                    request.ProductDescription,
+                    request.LogCallback ?? (async (_) => await Task.CompletedTask) 
+                );
                 var newPage = new LandingPage
                 {
                     Id = Guid.NewGuid(),
-                    UserId = request.UserId, // 3. EKLENDİ: Projeyi kullanıcıya bağlıyoruz
+                    UserId = request.UserId,
                     ProductName = request.ProductName,
                     Slug = generatedSlug,
                     ContactEmail = request.ContactEmail,
