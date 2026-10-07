@@ -60,6 +60,8 @@ namespace Launchify.Infrastructure.Services
                     string pageId = item.Key;
                     int newVisits = item.Value;
 
+                    await repository.IncrementVisitCountAsync(pageId, newVisits);
+
                     _logger.LogInformation("{Count} yeni ziyaret {PageId} ID'li platform için Firestore'a toplu yazıldı.", newVisits, pageId);
                 }
             }
