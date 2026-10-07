@@ -74,7 +74,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:3000"
             )
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -91,8 +92,6 @@ builder.Services.AddMediatR(cfg => {
 
 var app = builder.Build();
 
-app.MapHub<GenerationHub>("/generationHub");
-
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -108,5 +107,7 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<GenerationHub>("/generationHub"); 
+
 
 app.Run();
