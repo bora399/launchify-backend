@@ -39,7 +39,13 @@ namespace Launchify.Infrastructure.Repositories
                     {
                         { "AiGeneratedHeroTitle", page.AiConfig?.AiGeneratedHeroTitle ?? "" },
                         { "AiGeneratedMarketingCopy", page.AiConfig?.AiGeneratedMarketingCopy ?? "" },
-                        { "AccentColor", page.AiConfig?.AccentColor ?? "" }
+                        { "AccentColor", page.AiConfig?.AccentColor ?? "" },
+                        { "CallToActionText", page.AiConfig?.CallToActionText ?? "Erken Erişime Katıl" },
+                        { "Features", page.AiConfig?.Features?.Select(f => new Dictionary<string, object>
+                            {
+                                { "Title", f.Title ?? "" },
+                                { "Description", f.Description ?? "" }
+                            }).ToList() ?? new List<Dictionary<string, object>>() }
                     }
                 }
             };
@@ -72,6 +78,7 @@ namespace Launchify.Infrastructure.Repositories
             }
             return null;
         }
+
         public async Task<IEnumerable<LandingPage>> GetByUserIdAsync(string userId)
         {
             var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("UserId", userId);
@@ -89,6 +96,7 @@ namespace Launchify.Infrastructure.Repositories
 
             return landingPages;
         }
+
         public async Task DeleteAsync(string id)
         {
             var docRef = _firestoreDb.Collection("LandingPages").Document(id);
@@ -102,6 +110,22 @@ namespace Launchify.Infrastructure.Repositories
                 ? (Dictionary<string, object>)data["AiConfig"]
                 : new Dictionary<string, object>();
 
+            var featuresList = new List<FeatureItem>();
+            if (aiDict.ContainsKey("Features") && aiDict["Features"] is IEnumerable<object> rawFeatures)
+            {
+                foreach (var rawFeature in rawFeatures)
+                {
+                    if (rawFeature is Dictionary<string, object> fDict)
+                    {
+                        featuresList.Add(new FeatureItem
+                        {
+                            Title = fDict.ContainsKey("Title") ? fDict["Title"].ToString() : "",
+                            Description = fDict.ContainsKey("Description") ? fDict["Description"].ToString() : ""
+                        });
+                    }
+                }
+            }
+
             return new LandingPage
             {
                 Id = Guid.Parse(data["Id"].ToString()),
@@ -111,16 +135,16 @@ namespace Launchify.Infrastructure.Repositories
                 ProductDescription = data.ContainsKey("ProductDescription") ? data["ProductDescription"].ToString() : null,
                 ContactEmail = data.ContainsKey("ContactEmail") ? data["ContactEmail"].ToString() : null,
                 DemoLink = data.ContainsKey("DemoLink") ? data["DemoLink"].ToString() : null,
-
                 TemplateType = data.ContainsKey("TemplateType") ? data["TemplateType"].ToString() :
                               (data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : "aurora"),
-
                 TotalVisits = data.ContainsKey("TotalVisits") ? Convert.ToInt32(data["TotalVisits"]) : 0,
                 AiConfig = new AiPageConfig
                 {
                     AiGeneratedHeroTitle = aiDict.ContainsKey("AiGeneratedHeroTitle") ? aiDict["AiGeneratedHeroTitle"].ToString() : null,
                     AiGeneratedMarketingCopy = aiDict.ContainsKey("AiGeneratedMarketingCopy") ? aiDict["AiGeneratedMarketingCopy"].ToString() : null,
-                    AccentColor = aiDict.ContainsKey("AccentColor") ? aiDict["AccentColor"].ToString() : null
+                    AccentColor = aiDict.ContainsKey("AccentColor") ? aiDict["AccentColor"].ToString() : null,
+                    CallToActionText = aiDict.ContainsKey("CallToActionText") ? aiDict["CallToActionText"].ToString() : null,
+                    Features = featuresList
                 },
             };
         }
@@ -173,7 +197,7 @@ namespace Launchify.Infrastructure.Repositories
                 await docRef.SetAsync(updateData, SetOptions.MergeAll);
 
                 Console.WriteLine($"[GERÇEK BAŞARI] '{pageIdOrSlug}' için Firestore'a {visitCount} ziyaret İŞLENDİ.");
-                }
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"[KRİTİK HATA] Analitik '{pageIdOrSlug}' için yazılırken çöktü: {ex.Message}");

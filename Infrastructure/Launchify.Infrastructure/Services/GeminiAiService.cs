@@ -40,17 +40,24 @@ namespace Launchify.Infrastructure.Services
             await Task.Delay(1000);
 
             string prompt = $@"
-                Sen uzman bir ürün pazarlama stratejisti ve metin yazarısın (Copywriter). Yeni bir yazılım/ürün için dönüşüm odaklı (conversion-optimized) bir açılış sayfası (Landing Page) içeriği üreteceksin.
-                Ürün / Girişim Adı: {productName} 
-                Marka Tonu: {(themeType == "modern" ? "Modern, yenilikçi ve teknolojik (Startup tarzı)" : "Kurumsal, güvenilir ve ciddi (B2B tarzı)")}
-                Ürünün Özellikleri / Amacı: {productDescription}
+    Sen uzman bir ürün pazarlama stratejisti, dönüşüm oranı optimizasyonu (CRO) uzmanı ve metin yazarısın. Yeni bir yazılım/ürün için e-posta toplamaya (Lead Capture) yönelik, yüksek dönüşüm odaklı bir açılış sayfası (Landing Page) içeriği üreteceksin.
+    
+    Ürün / Girişim Adı: {productName} 
+    Marka Tonu: {(themeType == "modern" ? "Modern, yenilikçi ve teknolojik (Startup tarzı)" : "Kurumsal, güvenilir ve ciddi (B2B tarzı)")}
+    Ürünün Özellikleri / Amacı: {productDescription}
 
-                SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya ekstra metin ekleme:
-                {{
-                ""AiGeneratedHeroTitle"": ""Ürünün ana değer önerisini (value proposition) anlatan kısa ve vurucu slogan"",
-                ""AiGeneratedMarketingCopy"": ""Ürünün özelliklerini müşteriye fayda sağlayacak şekilde anlatan, yaklaşık 40-50 kelimelik profesyonel pazarlama metni."",
-                ""AccentColor"": ""{(themeType == "modern" ? "#2563EB" : "#0F172A")}""
-                }}";
+    SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown (```json gibi) veya ekstra metin ekleme:
+    {{
+        ""AiGeneratedHeroTitle"": ""Ürünün ana değer önerisini (value proposition) anlatan kısa ve vurucu başlık."",
+        ""AiGeneratedMarketingCopy"": ""Ürünün özelliklerini müşteriye fayda sağlayacak şekilde anlatan, yaklaşık 30-40 kelimelik ikna edici alt metin."",
+        ""CallToActionText"": ""Kullanıcıyı e-posta bırakmaya itecek 2-3 kelimelik vurucu buton metni (Örn: Erken Erişime Katıl, Ücretsiz Başla)."",
+        ""Features"": [
+            {{ ""Title"": ""1. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }},
+            {{ ""Title"": ""2. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }},
+            {{ ""Title"": ""3. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }}
+        ],
+        ""AccentColor"": ""{(themeType == "modern" ? "#2563EB" : "#0F172A")}""
+    }}";
 
             var requestBody = new
             {
