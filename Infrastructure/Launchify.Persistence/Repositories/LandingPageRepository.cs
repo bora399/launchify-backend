@@ -105,22 +105,24 @@ namespace Launchify.Infrastructure.Repositories
             return new LandingPage
             {
                 Id = Guid.Parse(data["Id"].ToString()),
-                UserId = data.ContainsKey("UserId") ? data["UserId"].ToString() : null, // EKLENDİ
+                UserId = data.ContainsKey("UserId") ? data["UserId"].ToString() : null,
                 Slug = data.ContainsKey("Slug") ? data["Slug"].ToString() : null,
                 ProductName = data.ContainsKey("ProductName") ? data["ProductName"].ToString() : null,
                 ProductDescription = data.ContainsKey("ProductDescription") ? data["ProductDescription"].ToString() : null,
-                ContactEmail = data.ContainsKey("ContactEmail") ? data["ContactEmail"].ToString() : null, // MAPLEMEYE EKLENDİ
+                ContactEmail = data.ContainsKey("ContactEmail") ? data["ContactEmail"].ToString() : null,
                 DemoLink = data.ContainsKey("DemoLink") ? data["DemoLink"].ToString() : null,
 
                 TemplateType = data.ContainsKey("TemplateType") ? data["TemplateType"].ToString() :
                               (data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : "aurora"),
+
+                TotalVisits = data.ContainsKey("TotalVisits") ? Convert.ToInt32(data["TotalVisits"]) : 0,
 
                 AiConfig = new AiPageConfig
                 {
                     AiGeneratedHeroTitle = aiDict.ContainsKey("AiGeneratedHeroTitle") ? aiDict["AiGeneratedHeroTitle"].ToString() : null,
                     AiGeneratedMarketingCopy = aiDict.ContainsKey("AiGeneratedMarketingCopy") ? aiDict["AiGeneratedMarketingCopy"].ToString() : null,
                     AccentColor = aiDict.ContainsKey("AccentColor") ? aiDict["AccentColor"].ToString() : null
-                }
+                },
             };
         }
 
