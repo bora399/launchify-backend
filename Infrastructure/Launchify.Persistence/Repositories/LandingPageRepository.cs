@@ -116,7 +116,6 @@ namespace Launchify.Infrastructure.Repositories
                               (data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : "aurora"),
 
                 TotalVisits = data.ContainsKey("TotalVisits") ? Convert.ToInt32(data["TotalVisits"]) : 0,
-
                 AiConfig = new AiPageConfig
                 {
                     AiGeneratedHeroTitle = aiDict.ContainsKey("AiGeneratedHeroTitle") ? aiDict["AiGeneratedHeroTitle"].ToString() : null,
