@@ -8,7 +8,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace Masalimiz.Infrastructure.Services
+// Not: Namespace'i kendi projendeki haline (Launchify veya Masalimiz) göre ayarlarsın.
+namespace Launchify.Infrastructure.Services
 {
     public class AiServiceUnavailableException : Exception
     {
@@ -33,8 +34,11 @@ namespace Masalimiz.Infrastructure.Services
             _apiKey = configuration["Gemini:ApiKey"];
         }
 
-        public async Task<AiPageConfig> GenerateContentAsync(string productName, string themeType, string productDescription)
+        public async Task<AiPageConfig> GenerateContentAsync(string productName, string themeType, string productDescription, Func<string, Task> logCallback)
         {
+            await logCallback($"[Adım 1/4] '{productName}' için sistem analizi başlatıldı...");
+            await Task.Delay(1000);
+
             string prompt = $@"
                 Sen uzman bir ürün pazarlama stratejisti ve metin yazarısın (Copywriter). Yeni bir yazılım/ürün için dönüşüm odaklı (conversion-optimized) bir açılış sayfası (Landing Page) içeriği üreteceksin.
                 Ürün / Girişim Adı: {productName} 
@@ -60,6 +64,8 @@ namespace Masalimiz.Infrastructure.Services
             string payload = JsonSerializer.Serialize(requestBody);
             Exception lastError = null;
 
+            await logCallback("[Adım 2/4] B2B/SaaS platform mimarisi tasarlanıyor...");
+
             foreach (var model in Models)
             {
                 string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_apiKey.Trim()}";
@@ -68,6 +74,8 @@ namespace Masalimiz.Infrastructure.Services
                 {
                     try
                     {
+                        await logCallback($"[Adım 3/4] AI motoru ile iletişim kuruluyor (Model: {model} - Deneme: {attempt + 1})...");
+
                         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
                         using var response = await _httpClient.PostAsync(url, content);
                         var responseString = await response.Content.ReadAsStringAsync();
@@ -79,6 +87,8 @@ namespace Masalimiz.Infrastructure.Services
 
                             var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)) +
                                         TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500));
+
+                            await logCallback($"[Uyarı] Sunucu yoğunluğu tespit edildi. {delay.TotalSeconds:F1} saniye sonra tekrar deneniyor...");
                             await Task.Delay(delay);
                             continue;
                         }
@@ -86,6 +96,7 @@ namespace Masalimiz.Infrastructure.Services
                         if (response.StatusCode == HttpStatusCode.NotFound)
                         {
                             lastError = new Exception($"{model}: 404 - {responseString}");
+                            await logCallback($"[Bilgi] {model} modeline ulaşılamadı. Alternatif modele geçiliyor...");
                             break;
                         }
 
@@ -101,26 +112,35 @@ namespace Masalimiz.Infrastructure.Services
                             .GetProperty("parts")[0]
                             .GetProperty("text").GetString();
 
+                        await logCallback("[Adım 4/4] Yanıt başarıyla alındı. React bileşenleri oluşturuluyor...");
+
                         if (!string.IsNullOrEmpty(textResult))
                         {
                             textResult = textResult.Replace("```json", "").Replace("```", "").Trim();
                         }
 
-                        return JsonSerializer.Deserialize<AiPageConfig>(
+                        var result = JsonSerializer.Deserialize<AiPageConfig>(
                             textResult,
                             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                        await logCallback("✅ İşlem Tamamlandı: Platformunuz canlıya alınmaya hazır!");
+
+                        return result;
                     }
-                    catch (TaskCanceledException ex) 
+                    catch (TaskCanceledException ex)
                     {
                         lastError = ex;
+                        await logCallback("[Hata] Bağlantı zaman aşımına uğradı. Yeniden deneniyor...");
                     }
-                    catch (HttpRequestException ex) 
+                    catch (HttpRequestException ex)
                     {
                         lastError = ex;
+                        await logCallback("[Hata] Ağ erişim sorunu yaşandı. Yeniden deneniyor...");
                     }
                 }
             }
 
+            await logCallback("❌ Hata: Tüm AI modelleri denendi ancak sunucu yanıt vermiyor. Lütfen daha sonra tekrar deneyin.");
             throw new AiServiceUnavailableException("AI servisi şu an yoğun.", lastError);
         }
     }

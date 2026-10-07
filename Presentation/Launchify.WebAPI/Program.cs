@@ -1,11 +1,12 @@
 using FluentValidation;
+using Google.Cloud.Firestore;
 using Launchify.API.Middlewares;
 using Launchify.Application.Common.Behaviors;
 using Launchify.Application.Interfaces;
 using Launchify.Infrastructure.Repositories;
+using Launchify.Infrastructure.Services;
 using Launchify.Persistence.Repositories;
-using Masalimiz.Infrastructure.Services;
-using Google.Cloud.Firestore;
+using LaunchifyBackend.Hubs;
 using System.IO;
 using System.Threading.RateLimiting;
 
@@ -36,6 +37,7 @@ var projectId = builder.Configuration["Firebase:ProjectId"] ?? "masalimiz-2d8a4"
 builder.Services.AddSingleton(provider => FirestoreDb.Create(projectId));
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -88,6 +90,8 @@ builder.Services.AddMediatR(cfg => {
 });
 
 var app = builder.Build();
+
+app.MapHub<GenerationHub>("/generationHub");
 
 app.UseExceptionHandler();
 

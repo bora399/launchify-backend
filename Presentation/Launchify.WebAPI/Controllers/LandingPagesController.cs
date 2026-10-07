@@ -1,9 +1,13 @@
-﻿using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
+﻿using Launchify.Application.DTOs;
+using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
 using Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPage;
 using Launchify.Application.Interfaces;
+using Launchify.Infrastructure.Services;
+using LaunchifyBackend.Hubs;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Launchify.WebAPI.Controllers
 {
@@ -14,10 +18,33 @@ namespace Launchify.WebAPI.Controllers
         private readonly IMediator _mediator;
         private readonly ILandingPageRepository _repository;
 
-        public LandingPagesController(IMediator mediator, ILandingPageRepository repository)
+        private readonly GeminiAiService _aiService;
+        private readonly IHubContext<GenerationHub> _hubContext;
+
+        public LandingPagesController(IMediator mediator, ILandingPageRepository repository, GeminiAiService aiService, IHubContext<GenerationHub> hubContext)
         {
             _mediator = mediator;
             _repository = repository;
+            _aiService = aiService;
+            _hubContext = hubContext;
+        }
+
+        [HttpPost("generate")]
+        public IActionResult Generate([FromBody] GeneratePageRequest request)
+        {
+            _ = Task.Run(async () =>
+            {
+                await _aiService.GenerateContentAsync(
+                    request.ProductName,
+                    request.ThemeType,
+                    request.ProductDescription,
+                    async (logMessage) =>
+                    {
+                        await _hubContext.Clients.Client(request.ConnectionId).SendAsync("ReceiveLog", logMessage);
+                    });
+            });
+
+            return Ok(new { message = "Süreç başlatıldı, loglar SignalR üzerinden akıyor..." });
         }
 
         [HttpPost("create")]
