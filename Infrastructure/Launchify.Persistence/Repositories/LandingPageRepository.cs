@@ -139,30 +139,43 @@ namespace Launchify.Infrastructure.Repositories
                 }
                 else
                 {
-                    var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("Slug", pageIdOrSlug);
-                    var querySnapshot = await query.GetSnapshotAsync();
+                    var query1 = _firestoreDb.Collection("LandingPages").WhereEqualTo("Slug", pageIdOrSlug);
+                    var snap1 = await query1.GetSnapshotAsync();
 
-                    if (querySnapshot.Documents.Count > 0)
+                    if (snap1.Documents.Count > 0)
                     {
-                        docRef = querySnapshot.Documents[0].Reference;
+                        docRef = snap1.Documents[0].Reference;
                     }
                     else
                     {
-                        Console.WriteLine($"[HATA] Analitik güncellenemedi: '{pageIdOrSlug}' bulunamadı.");
-                        return;
+                        var query2 = _firestoreDb.Collection("LandingPages").WhereEqualTo("slug", pageIdOrSlug);
+                        var snap2 = await query2.GetSnapshotAsync();
+
+                        if (snap2.Documents.Count > 0)
+                        {
+                            docRef = snap2.Documents[0].Reference;
+                        }
                     }
                 }
 
-                await docRef.UpdateAsync(new Dictionary<string, object>
-        {
-            { "TotalVisits", FieldValue.Increment(visitCount) }
-        });
+                if (docRef == null)
+                {
+                    Console.WriteLine($"[UYARI] Firestore'da '{pageIdOrSlug}' bulunamadığı için sayaç artırılamadı!");
+                    return;
+                }
 
-                Console.WriteLine($"[BAŞARILI] {pageIdOrSlug} için ziyaret sayısı {visitCount} artırıldı!");
-            }
+                var updateData = new Dictionary<string, object>
+                {
+                    { "TotalVisits", FieldValue.Increment(visitCount) }
+                };
+
+                await docRef.SetAsync(updateData, SetOptions.MergeAll);
+
+                Console.WriteLine($"[GERÇEK BAŞARI] '{pageIdOrSlug}' için Firestore'a {visitCount} ziyaret İŞLENDİ.");
+                }
             catch (Exception ex)
             {
-                Console.WriteLine($"Analitik güncellenirken hata: {ex.Message}");
+                Console.WriteLine($"[KRİTİK HATA] Analitik '{pageIdOrSlug}' için yazılırken çöktü: {ex.Message}");
             }
         }
     }
