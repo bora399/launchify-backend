@@ -124,16 +124,41 @@ namespace Launchify.Infrastructure.Repositories
             };
         }
 
-        public async Task IncrementVisitCountAsync(string pageId, int visitCount)
+        public async Task IncrementVisitCountAsync(string pageIdOrSlug, int visitCount)
         {
             try
             {
-                var docRef = _firestoreDb.Collection("LandingPages").Document(pageId);
+                DocumentReference docRef = null;
+
+                var directDoc = _firestoreDb.Collection("LandingPages").Document(pageIdOrSlug);
+                var directSnapshot = await directDoc.GetSnapshotAsync();
+
+                if (directSnapshot.Exists)
+                {
+                    docRef = directDoc;
+                }
+                else
+                {
+                    var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("Slug", pageIdOrSlug);
+                    var querySnapshot = await query.GetSnapshotAsync();
+
+                    if (querySnapshot.Documents.Count > 0)
+                    {
+                        docRef = querySnapshot.Documents[0].Reference;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[HATA] Analitik güncellenemedi: '{pageIdOrSlug}' bulunamadı.");
+                        return;
+                    }
+                }
 
                 await docRef.UpdateAsync(new Dictionary<string, object>
         {
             { "TotalVisits", FieldValue.Increment(visitCount) }
         });
+
+                Console.WriteLine($"[BAŞARILI] {pageIdOrSlug} için ziyaret sayısı {visitCount} artırıldı!");
             }
             catch (Exception ex)
             {
