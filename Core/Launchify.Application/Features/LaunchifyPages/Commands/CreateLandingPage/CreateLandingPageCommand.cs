@@ -1,5 +1,6 @@
 ﻿using MediatR;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage
 {
@@ -15,8 +16,8 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
         //signalr
         public string ConnectionId { get; set; }
 
-        [System.Text.Json.Serialization.JsonIgnore]
-        public Func<string, Task> LogCallback { get; set; }
+        [JsonIgnore]
+        public Func<string, Task>? LogCallback { get; set; }
     }
 
     public class CreateLandingResponse
