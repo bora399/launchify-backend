@@ -15,6 +15,7 @@ namespace Launchify.Domain.Entities
         public bool IsActive { get; set; } = true;
         public string Slug { get; set; }
         public string TemplateType { get; set; }
+        public int TotalVisits { get; set; } = 0;
     }
 
     public class AiPageConfig

@@ -123,5 +123,22 @@ namespace Launchify.Infrastructure.Repositories
                 }
             };
         }
+
+        public async Task IncrementVisitCountAsync(string pageId, int visitCount)
+        {
+            try
+            {
+                var docRef = _firestoreDb.Collection("LandingPages").Document(pageId);
+
+                await docRef.UpdateAsync(new Dictionary<string, object>
+        {
+            { "TotalVisits", FieldValue.Increment(visitCount) }
+        });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Analitik güncellenirken hata: {ex.Message}");
+            }
+        }
     }
 }

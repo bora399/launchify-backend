@@ -82,6 +82,8 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<ILandingPageRepository, LandingPageRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAiGeneratorService, GeminiAiService>();
+builder.Services.AddSingleton<AnalyticsQueueService>();
+builder.Services.AddHostedService<AnalyticsBackgroundWorker>();
 
 builder.Services.AddValidatorsFromAssemblies(AppDomain.CurrentDomain.GetAssemblies());
 
