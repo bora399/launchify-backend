@@ -7,10 +7,19 @@ using Launchify.Infrastructure.Repositories;
 using Launchify.Infrastructure.Services;
 using Launchify.Persistence.Repositories;
 using LaunchifyBackend.Hubs;
+using Microsoft.AspNetCore.HttpOverrides;
 using System.IO;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Render / Cloudflare Proxy Header Desteði
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var firebaseJson = Environment.GetEnvironmentVariable("FIREBASE_JSON");
 
@@ -47,21 +56,35 @@ builder.Services.AddProblemDetails();
 builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("AiCreationLimit", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+    {
+        string clientIp = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+
+        if (!string.IsNullOrWhiteSpace(clientIp))
+        {
+            clientIp = clientIp.Split(',')[0].Trim();
+        }
+        else
+        {
+            clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? Guid.NewGuid().ToString();
+        }
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: clientIp,
             factory: partition => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
-                PermitLimit = 15,
+                PermitLimit = 50, 
                 Window = TimeSpan.FromHours(1),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 0
-            }));
+                QueueLimit = 5
+            });
+    });
 
     options.OnRejected = async (context, token) =>
     {
         context.HttpContext.Response.StatusCode = 429;
-        await context.HttpContext.Response.WriteAsync("Saatlik proje oluþturma limitine ulaþtýnýz. Lütfen daha sonra tekrar deneyin.", token);
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync("{\"message\": \"Saatlik proje oluþturma limitine ulaþtýnýz. Lütfen biraz bekleyin.\"}", token);
     };
 });
 
@@ -95,6 +118,8 @@ builder.Services.AddMediatR(cfg => {
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -110,7 +135,6 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<GenerationHub>("/generationHub"); 
-
+app.MapHub<GenerationHub>("/generationHub");
 
 app.Run();
