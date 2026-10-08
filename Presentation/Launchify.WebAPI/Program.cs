@@ -57,23 +57,17 @@ builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("AiCreationLimit", httpContext =>
     {
-        string clientIp = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-
-        if (!string.IsNullOrWhiteSpace(clientIp))
-        {
-            clientIp = clientIp.Split(',')[0].Trim();
-        }
-        else
-        {
-            clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? Guid.NewGuid().ToString();
-        }
+        string partitionKey = httpContext.Request.Headers["X-User-Id"].FirstOrDefault()
+                              ?? httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim()
+                              ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                              ?? Guid.NewGuid().ToString();
 
         return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: clientIp,
+            partitionKey: partitionKey,
             factory: partition => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
-                PermitLimit = 50, 
+                PermitLimit = 50,
                 Window = TimeSpan.FromHours(1),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 5
@@ -84,7 +78,7 @@ builder.Services.AddRateLimiter(options =>
     {
         context.HttpContext.Response.StatusCode = 429;
         context.HttpContext.Response.ContentType = "application/json";
-        await context.HttpContext.Response.WriteAsync("{\"message\": \"Saatlik proje oluþturma limitine ulaþtýnýz. Lütfen biraz bekleyin.\"}", token);
+        await context.HttpContext.Response.WriteAsync("{\"message\": \"Saatlik oluþturma sýnýrýna ulaþýldý. Lütfen biraz bekleyin.\"}", token);
     };
 });
 
