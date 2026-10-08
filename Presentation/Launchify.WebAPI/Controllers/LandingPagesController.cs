@@ -2,23 +2,23 @@
 using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
 using Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPage;
 using Launchify.Application.Interfaces;
-using Launchify.Infrastructure.Repositories;
 using LaunchifyBackend.Hubs;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using System;
 using System.Threading.Tasks;
 
 namespace Launchify.WebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class LandingPagesController(IMediator mediator,
-            ILandingPageRepository repository,
-            IHubContext<GenerationHub> hubContext) : ControllerBase
+    public class LandingPagesController(
+        IMediator mediator,
+        ILandingPageRepository repository,
+        IHubContext<GenerationHub> hubContext) : ControllerBase
     {
-
         [HttpPost("create")]
         [EnableRateLimiting("AiCreationLimit")]
         public async Task<IActionResult> CreateLandingPage([FromBody] CreateLandingPageCommand command)
@@ -78,31 +78,42 @@ namespace Launchify.WebAPI.Controllers
                 id = pageData.Id.ToString(),
                 slug = pageData.Slug,
                 productName = pageData.ProductName,
-                aiGeneratedHeroTitle = pageData.AiConfig?.AiGeneratedHeroTitle,
-                aiGeneratedMarketingCopy = pageData.AiConfig?.AiGeneratedMarketingCopy,
-                accentColor = pageData.AiConfig?.AccentColor,
+                templateType = pageData.TemplateType,
                 demoLink = pageData.DemoLink,
-                templateType = pageData.TemplateType
+                contactEmail = pageData.ContactEmail,
+                aiConfig = new
+                {
+                    aiGeneratedHeroTitle = pageData.AiConfig?.AiGeneratedHeroTitle,
+                    aiGeneratedMarketingCopy = pageData.AiConfig?.AiGeneratedMarketingCopy,
+                    accentColor = pageData.AiConfig?.AccentColor,
+                    callToActionText = pageData.AiConfig?.CallToActionText,
+                    features = pageData.AiConfig?.Features
+                }
             });
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateLandingPage(string id, [FromBody] UpdateLandingPageRequest request)
+        public async Task<IActionResult> UpdateLandingPage([FromRoute] string id, [FromBody] UpdateLandingPageRequest request)
         {
             if (string.IsNullOrWhiteSpace(id))
-                return BadRequest("Id parametresi gereklidir.");
+                return BadRequest(new { message = "Id parametresi gereklidir." });
+
+            if (request == null)
+                return BadRequest(new { message = "Güncelleme verisi boş olamaz." });
 
             try
             {
                 var existingPage = await repository.GetByIdAsync(id);
 
-                if (existingPage == null && !string.IsNullOrWhiteSpace(request.ProductName))
+                if (existingPage == null)
                 {
                     existingPage = await repository.GetBySlugAsync(id);
                 }
 
                 if (existingPage == null)
-                    return NotFound("Düzenlenecek proje bulunamadı.");
+                {
+                    return NotFound(new { message = "Düzenlenecek proje bulunamadı." });
+                }
 
                 if (!string.IsNullOrWhiteSpace(request.ProductName))
                     existingPage.ProductName = request.ProductName;
@@ -134,7 +145,7 @@ namespace Launchify.WebAPI.Controllers
             catch (Exception ex)
             {
                 Console.WriteLine($"[GÜNCELLEME HATASI]: {ex.Message} \n {ex.StackTrace}");
-                return StatusCode(500, $"Sunucu hatası: {ex.Message}");
+                return StatusCode(500, new { message = $"Sunucu hatası: {ex.Message}" });
             }
         }
     }

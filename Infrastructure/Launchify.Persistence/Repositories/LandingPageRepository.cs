@@ -55,6 +55,8 @@ namespace Launchify.Infrastructure.Repositories
 
         public async Task<LandingPage> GetByIdAsync(string id)
         {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+
             var docRef = _firestoreDb.Collection("LandingPages").Document(id);
             var snapshot = await docRef.GetSnapshotAsync();
 
@@ -62,11 +64,22 @@ namespace Launchify.Infrastructure.Repositories
             {
                 return MapSnapshotToLandingPage(snapshot);
             }
+
+            // Document ID eşleşmezse içindeki Id string alanı üzerinden sorgula
+            var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("Id", id);
+            var querySnapshot = await query.GetSnapshotAsync();
+            if (querySnapshot.Documents.Count > 0)
+            {
+                return MapSnapshotToLandingPage(querySnapshot.Documents[0]);
+            }
+
             return null;
         }
 
         public async Task<LandingPage> GetBySlugAsync(string slug)
         {
+            if (string.IsNullOrWhiteSpace(slug)) return null;
+
             var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("Slug", slug);
             var snapshot = await query.GetSnapshotAsync();
 
@@ -76,6 +89,16 @@ namespace Launchify.Infrastructure.Repositories
             {
                 return MapSnapshotToLandingPage(document);
             }
+
+            // Küçük harf slug alternatifi
+            var queryLower = _firestoreDb.Collection("LandingPages").WhereEqualTo("slug", slug);
+            var snapshotLower = await queryLower.GetSnapshotAsync();
+            var docLower = snapshotLower.Documents.FirstOrDefault();
+            if (docLower != null && docLower.Exists)
+            {
+                return MapSnapshotToLandingPage(docLower);
+            }
+
             return null;
         }
 
@@ -101,6 +124,36 @@ namespace Launchify.Infrastructure.Repositories
         {
             var docRef = _firestoreDb.Collection("LandingPages").Document(id);
             await docRef.DeleteAsync();
+        }
+
+        public async Task UpdateAsync(LandingPage landingPage)
+        {
+            if (landingPage == null)
+                throw new ArgumentException("Landing page boş olamaz.");
+
+            string docId = landingPage.Id.ToString();
+            var docRef = _firestoreDb.Collection("LandingPages").Document(docId);
+
+            var updateData = new Dictionary<string, object>
+            {
+                { "ProductName", landingPage.ProductName ?? "" },
+                { "TemplateType", landingPage.TemplateType ?? "aurora" },
+                { "AiConfig", new Dictionary<string, object>
+                    {
+                        { "AiGeneratedHeroTitle", landingPage.AiConfig?.AiGeneratedHeroTitle ?? "" },
+                        { "AiGeneratedMarketingCopy", landingPage.AiConfig?.AiGeneratedMarketingCopy ?? "" },
+                        { "AccentColor", landingPage.AiConfig?.AccentColor ?? "" },
+                        { "CallToActionText", landingPage.AiConfig?.CallToActionText ?? "Erken Erişime Katıl" },
+                        { "Features", landingPage.AiConfig?.Features?.Select(f => new Dictionary<string, object>
+                            {
+                                { "Title", f.Title ?? "" },
+                                { "Description", f.Description ?? "" }
+                            }).ToList() ?? new List<Dictionary<string, object>>() }
+                    }
+                }
+            };
+
+            await docRef.SetAsync(updateData, SetOptions.MergeAll);
         }
 
         private LandingPage MapSnapshotToLandingPage(DocumentSnapshot snapshot)
@@ -136,7 +189,7 @@ namespace Launchify.Infrastructure.Repositories
                 ContactEmail = data.ContainsKey("ContactEmail") ? data["ContactEmail"].ToString() : null,
                 DemoLink = data.ContainsKey("DemoLink") ? data["DemoLink"].ToString() : null,
                 TemplateType = data.ContainsKey("TemplateType") ? data["TemplateType"].ToString() :
-                              (data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : "aurora"),
+                               (data.ContainsKey("ThemeType") ? data["ThemeType"].ToString() : "aurora"),
                 TotalVisits = data.ContainsKey("TotalVisits") ? Convert.ToInt32(data["TotalVisits"]) : 0,
                 AiConfig = new AiPageConfig
                 {
@@ -154,7 +207,6 @@ namespace Launchify.Infrastructure.Repositories
             try
             {
                 DocumentReference docRef = null;
-
                 var directDoc = _firestoreDb.Collection("LandingPages").Document(pageIdOrSlug);
                 var directSnapshot = await directDoc.GetSnapshotAsync();
 
@@ -195,25 +247,12 @@ namespace Launchify.Infrastructure.Repositories
                 };
 
                 await docRef.SetAsync(updateData, SetOptions.MergeAll);
-
-                Console.WriteLine($"[GERÇEK BAŞARI] '{pageIdOrSlug}' için Firestore'a {visitCount} ziyaret İŞLENDİ.");
+                Console.WriteLine($"[BAŞARI] '{pageIdOrSlug}' için Firestore'a {visitCount} ziyaret İŞLENDİ.");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[KRİTİK HATA] Analitik '{pageIdOrSlug}' için yazılırken çöktü: {ex.Message}");
             }
-        }
-
-        public async Task UpdateAsync(LandingPage landingPage)
-        {
-            if (landingPage == null)
-                throw new ArgumentException("Landing page boş olamaz.");
-
-            string docId = landingPage.Id.ToString();
-
-            var docRef = _firestoreDb.Collection("LandingPages").Document(docId);
-
-            await docRef.SetAsync(landingPage, SetOptions.MergeAll);
         }
     }
 }
