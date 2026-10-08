@@ -84,6 +84,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAiGeneratorService, GeminiAiService>();
 builder.Services.AddSingleton<AnalyticsQueueService>();
 builder.Services.AddHostedService<AnalyticsBackgroundWorker>();
+builder.Services.AddScoped<IWaitlistRepository, WaitlistRepository>();
 
 builder.Services.AddValidatorsFromAssemblies(AppDomain.CurrentDomain.GetAssemblies());
 
