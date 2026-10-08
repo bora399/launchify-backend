@@ -206,10 +206,12 @@ namespace Launchify.Infrastructure.Repositories
 
         public async Task UpdateAsync(LandingPage landingPage)
         {
-            if (landingPage == null || landingPage.Id == Guid.Empty)
-                throw new ArgumentException("Geçersiz landing page veya Id boş olamaz.");
+            if (landingPage == null)
+                throw new ArgumentException("Landing page boş olamaz.");
 
-            var docRef = _firestoreDb.Collection("LandingPages").Document(landingPage.Id.ToString());
+            string docId = landingPage.Id.ToString();
+
+            var docRef = _firestoreDb.Collection("LandingPages").Document(docId);
 
             await docRef.SetAsync(landingPage, SetOptions.MergeAll);
         }

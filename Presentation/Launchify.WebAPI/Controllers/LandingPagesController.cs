@@ -14,21 +14,10 @@ namespace Launchify.WebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class LandingPagesController : ControllerBase
-    {
-        private readonly IMediator _mediator;
-        private readonly ILandingPageRepository _repository;
-        private readonly IHubContext<GenerationHub> _hubContext;
-
-        public LandingPagesController(
-            IMediator mediator,
+    public class LandingPagesController(IMediator mediator,
             ILandingPageRepository repository,
-            IHubContext<GenerationHub> hubContext)
-        {
-            _mediator = mediator;
-            _repository = repository;
-            _hubContext = hubContext;
-        }
+            IHubContext<GenerationHub> hubContext) : ControllerBase
+    {
 
         [HttpPost("create")]
         [EnableRateLimiting("AiCreationLimit")]
@@ -38,11 +27,11 @@ namespace Launchify.WebAPI.Controllers
             {
                 if (!string.IsNullOrEmpty(command.ConnectionId))
                 {
-                    await _hubContext.Clients.Client(command.ConnectionId).SendAsync("ReceiveLog", logMessage);
+                    await hubContext.Clients.Client(command.ConnectionId).SendAsync("ReceiveLog", logMessage);
                 }
             };
 
-            var response = await _mediator.Send(command);
+            var response = await mediator.Send(command);
 
             if (response.IsSuccess)
             {
@@ -60,7 +49,7 @@ namespace Launchify.WebAPI.Controllers
                 return BadRequest(new { message = "UserId parametresi gereklidir." });
             }
 
-            var projects = await _repository.GetByUserIdAsync(userId);
+            var projects = await repository.GetByUserIdAsync(userId);
             return Ok(projects);
         }
 
@@ -68,7 +57,7 @@ namespace Launchify.WebAPI.Controllers
         public async Task<IActionResult> DeleteLandingPage(string id, [FromQuery] string userId)
         {
             var command = new DeleteLandingPageCommand { PageId = id, UserId = userId };
-            var response = await _mediator.Send(command);
+            var response = await mediator.Send(command);
 
             if (response.IsSuccess) return Ok(response);
 
@@ -78,7 +67,7 @@ namespace Launchify.WebAPI.Controllers
         [HttpGet("{slug}")]
         public async Task<IActionResult> GetLandingPageBySlug(string slug)
         {
-            var pageData = await _repository.GetBySlugAsync(slug);
+            var pageData = await repository.GetBySlugAsync(slug);
             if (pageData == null)
             {
                 return NotFound(new { message = "Bu isme ait bir platform bulunamadı." });
@@ -103,18 +92,29 @@ namespace Launchify.WebAPI.Controllers
             if (string.IsNullOrWhiteSpace(id))
                 return BadRequest("Id parametresi gereklidir.");
 
-            var existingPage = await _repository.GetByIdAsync(id);
-            if (existingPage == null)
-                return NotFound("Düzenlenecek proje bulunamadı.");
-
-            if (!string.IsNullOrWhiteSpace(request.ProductName))
-                existingPage.ProductName = request.ProductName;
-
-            if (!string.IsNullOrWhiteSpace(request.TemplateType))
-                existingPage.TemplateType = request.TemplateType;
-
-            if (existingPage.AiConfig != null)
+            try
             {
+                var existingPage = await repository.GetByIdAsync(id);
+
+                if (existingPage == null && !string.IsNullOrWhiteSpace(request.ProductName))
+                {
+                    existingPage = await repository.GetBySlugAsync(id);
+                }
+
+                if (existingPage == null)
+                    return NotFound("Düzenlenecek proje bulunamadı.");
+
+                if (!string.IsNullOrWhiteSpace(request.ProductName))
+                    existingPage.ProductName = request.ProductName;
+
+                if (!string.IsNullOrWhiteSpace(request.TemplateType))
+                    existingPage.TemplateType = request.TemplateType;
+
+                if (existingPage.AiConfig == null)
+                {
+                    existingPage.AiConfig = new Launchify.Domain.Entities.AiPageConfig();
+                }
+
                 if (!string.IsNullOrWhiteSpace(request.HeroTitle))
                     existingPage.AiConfig.AiGeneratedHeroTitle = request.HeroTitle;
 
@@ -126,11 +126,16 @@ namespace Launchify.WebAPI.Controllers
 
                 if (!string.IsNullOrWhiteSpace(request.AccentColor))
                     existingPage.AiConfig.AccentColor = request.AccentColor;
+
+                await repository.UpdateAsync(existingPage);
+
+                return Ok(new { message = "Proje başarıyla güncellendi.", page = existingPage });
             }
-
-            await _repository.UpdateAsync(existingPage);
-
-            return Ok(new { message = "Proje başarıyla güncellendi.", page = existingPage });
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GÜNCELLEME HATASI]: {ex.Message} \n {ex.StackTrace}");
+                return StatusCode(500, $"Sunucu hatası: {ex.Message}");
+            }
         }
     }
 }
