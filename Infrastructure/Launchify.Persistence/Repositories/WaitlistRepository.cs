@@ -36,7 +36,29 @@ namespace Launchify.Infrastructure.Repositories
 
         public async Task<IEnumerable<WaitlistEntry>> GetByPageIdAsync(string pageId)
         {
-            return new List<WaitlistEntry>();
+            var query = _firestoreDb.Collection("Waitlists").WhereEqualTo("PageId", pageId);
+            var snapshot = await query.GetSnapshotAsync();
+
+            var entries = new List<WaitlistEntry>();
+
+            foreach (var doc in snapshot.Documents)
+            {
+                if (doc.Exists)
+                {
+                    var data = doc.ToDictionary();
+                    entries.Add(new WaitlistEntry
+                    {
+                        Id = Guid.Parse(data["Id"].ToString()),
+                        PageId = data.ContainsKey("PageId") ? data["PageId"].ToString() : null,
+                        Email = data.ContainsKey("Email") ? data["Email"].ToString() : null,
+                        CreatedAt = data.ContainsKey("CreatedAt") && data["CreatedAt"] is Timestamp ts
+                            ? ts.ToDateTime()
+                            : DateTime.UtcNow
+                    });
+                }
+            }
+
+            return entries.OrderByDescending(x => x.CreatedAt);
         }
     }
 }

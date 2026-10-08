@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
 using System;
+using Launchify.Application.DTOs;
 
 namespace Launchify.WebAPI.Controllers
 {
@@ -35,11 +36,17 @@ namespace Launchify.WebAPI.Controllers
             await _waitlistRepository.AddAsync(entry);
             return Ok(new { message = "Successfully joined the waitlist." });
         }
-    }
 
-    public class WaitlistRequest
-    {
-        public string PageId { get; set; }
-        public string Email { get; set; }
+        [HttpGet("{pageId}")]
+        public async Task<IActionResult> GetWaitlistByPageId(string pageId)
+        {
+            if (string.IsNullOrWhiteSpace(pageId))
+            {
+                return BadRequest("PageId gereklidir.");
+            }
+
+            var entries = await _waitlistRepository.GetByPageIdAsync(pageId);
+            return Ok(entries);
+        }
     }
 }
