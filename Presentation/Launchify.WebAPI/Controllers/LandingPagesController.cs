@@ -1,6 +1,8 @@
-﻿using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
+﻿using Launchify.Application.DTOs;
+using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
 using Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPage;
 using Launchify.Application.Interfaces;
+using Launchify.Infrastructure.Repositories;
 using LaunchifyBackend.Hubs;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -93,6 +95,42 @@ namespace Launchify.WebAPI.Controllers
                 demoLink = pageData.DemoLink,
                 templateType = pageData.TemplateType
             });
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateLandingPage(string id, [FromBody] UpdateLandingPageRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return BadRequest("Id parametresi gereklidir.");
+
+            var existingPage = await _repository.GetByIdAsync(id);
+            if (existingPage == null)
+                return NotFound("Düzenlenecek proje bulunamadı.");
+
+            if (!string.IsNullOrWhiteSpace(request.ProductName))
+                existingPage.ProductName = request.ProductName;
+
+            if (!string.IsNullOrWhiteSpace(request.TemplateType))
+                existingPage.TemplateType = request.TemplateType;
+
+            if (existingPage.AiConfig != null)
+            {
+                if (!string.IsNullOrWhiteSpace(request.HeroTitle))
+                    existingPage.AiConfig.AiGeneratedHeroTitle = request.HeroTitle;
+
+                if (!string.IsNullOrWhiteSpace(request.MarketingCopy))
+                    existingPage.AiConfig.AiGeneratedMarketingCopy = request.MarketingCopy;
+
+                if (!string.IsNullOrWhiteSpace(request.CallToActionText))
+                    existingPage.AiConfig.CallToActionText = request.CallToActionText;
+
+                if (!string.IsNullOrWhiteSpace(request.AccentColor))
+                    existingPage.AiConfig.AccentColor = request.AccentColor;
+            }
+
+            await _landingPageRepository.UpdateAsync(existingPage);
+
+            return Ok(new { message = "Proje başarıyla güncellendi.", page = existingPage });
         }
     }
 }
