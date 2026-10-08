@@ -23,5 +23,10 @@ namespace Launchify.Domain.Entities
         public string AiGeneratedHeroTitle { get; set; }
         public string AiGeneratedMarketingCopy { get; set; }
         public string AccentColor { get; set; }
+
+        public string CallToActionText { get; set; }
+        public List<FeatureItem> Features { get; set; } = new List<FeatureItem>();
     }
+
+
 }
