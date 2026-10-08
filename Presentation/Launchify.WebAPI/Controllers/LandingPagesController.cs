@@ -128,7 +128,7 @@ namespace Launchify.WebAPI.Controllers
                     existingPage.AiConfig.AccentColor = request.AccentColor;
             }
 
-            await _landingPageRepository.UpdateAsync(existingPage);
+            await _repository.UpdateAsync(existingPage);
 
             return Ok(new { message = "Proje başarıyla güncellendi.", page = existingPage });
         }

@@ -203,5 +203,15 @@ namespace Launchify.Infrastructure.Repositories
                 Console.WriteLine($"[KRİTİK HATA] Analitik '{pageIdOrSlug}' için yazılırken çöktü: {ex.Message}");
             }
         }
+
+        public async Task UpdateAsync(LandingPage landingPage)
+        {
+            if (landingPage == null || landingPage.Id == Guid.Empty)
+                throw new ArgumentException("Geçersiz landing page veya Id boş olamaz.");
+
+            var docRef = _firestoreDb.Collection("LandingPages").Document(landingPage.Id.ToString());
+
+            await docRef.SetAsync(landingPage, SetOptions.MergeAll);
+        }
     }
 }

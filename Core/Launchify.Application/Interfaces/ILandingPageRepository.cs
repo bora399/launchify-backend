@@ -10,6 +10,7 @@ namespace Launchify.Application.Interfaces
         Task<LandingPage> GetBySlugAsync(string slug);
         Task<IEnumerable<LandingPage>> GetByUserIdAsync(string userId);
         Task IncrementVisitCountAsync(string pageId, int visitCount);
+        Task UpdateAsync(LandingPage landingPage);
         Task DeleteAsync(string id);
     }
 }
