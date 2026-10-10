@@ -181,7 +181,7 @@ Mevcut Şablon: {request.CurrentTemplate}
 
 GÖREVİN: {modeDirective}
 
-SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra metin ekleme:
+SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya fazladan açıklama metni ekleme:
 {{
   ""HeroTitle"": ""Yeni veya optimize edilmiş başlık"",
   ""MarketingCopy"": ""Yeni veya optimize edilmiş açıklama (25-35 kelime)"",
@@ -200,10 +200,15 @@ SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra
             };
 
             string payload = JsonSerializer.Serialize(requestBody);
+            string key = (_apiKey ?? string.Empty).Trim();
+            Exception lastError = null;
 
-            foreach (var model in Models)
+            // Kendi modellerin öncelikli, ardından yedekler
+            string[] assistModels = { "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash" };
+
+            foreach (var model in assistModels)
             {
-                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={_apiKey}";
+                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={key}";
 
                 try
                 {
@@ -211,35 +216,54 @@ SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra
                     using var response = await _httpClient.PostAsync(url, content);
                     var responseString = await response.Content.ReadAsStringAsync();
 
-                    if (!response.IsSuccessStatusCode) continue;
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine($"[AI Assist Uyarı] Model '{model}' hata verdi: {(int)response.StatusCode} - {responseString}");
+                        lastError = new Exception($"{model}: HTTP {(int)response.StatusCode} - {responseString}");
+                        continue;
+                    }
 
                     using var jsonDoc = JsonDocument.Parse(responseString);
-                    var candidates = jsonDoc.RootElement.GetProperty("candidates");
-                    if (candidates.GetArrayLength() == 0) continue;
+                    var root = jsonDoc.RootElement;
+
+                    if (!root.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+                    {
+                        Console.WriteLine($"[AI Assist Uyarı] Model '{model}' boş candidate döndürdü.");
+                        continue;
+                    }
 
                     var textResult = candidates[0]
                         .GetProperty("content")
                         .GetProperty("parts")[0]
                         .GetProperty("text").GetString();
 
-                    if (!string.IsNullOrEmpty(textResult))
+                    if (string.IsNullOrWhiteSpace(textResult)) continue;
+
+                    // GÜVENLİ JSON AYIKLAMA (Markdown ve selamlama metinlerini temizler)
+                    string cleanJson = textResult.Trim();
+                    int firstBrace = cleanJson.IndexOf('{');
+                    int lastBrace = cleanJson.LastIndexOf('}');
+
+                    if (firstBrace >= 0 && lastBrace > firstBrace)
                     {
-                        textResult = textResult.Replace("```json", "").Replace("```", "").Trim();
+                        cleanJson = cleanJson.Substring(firstBrace, lastBrace - firstBrace + 1);
                     }
 
                     var result = JsonSerializer.Deserialize<AiAssistResult>(
-                        textResult,
+                        cleanJson,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                     if (result != null) return result;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Console.WriteLine($"[AI Assist Hata] Model '{model}': {ex.Message}");
+                    lastError = ex;
                     continue;
                 }
             }
 
-            throw new AiServiceUnavailableException("AI asistanı şu anda yanıt veremedi.");
+            throw new AiServiceUnavailableException($"AI asistanı yanıt veremedi. Son Hata: {lastError?.Message}");
         }
     }
 }

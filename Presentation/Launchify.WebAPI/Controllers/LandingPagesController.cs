@@ -150,21 +150,35 @@ namespace Launchify.WebAPI.Controllers
         }
 
         [HttpPost("ai-assist")]
+        [Microsoft.AspNetCore.Authorization.AllowAnonymous] 
         public async Task<IActionResult> AiAssist(
-        [FromBody] Launchify.Application.DTOs.AiAssistRequest request,
-        [FromServices] IAiGeneratorService aiService) 
+                    [FromBody] Launchify.Application.DTOs.AiAssistRequest request,
+                    [FromServices] IAiGeneratorService aiService)
         {
             try
             {
                 if (request == null)
+                {
+                    Console.WriteLine("[AI-Assist HATA] İstek gövdesi (body) boş geldi.");
                     return BadRequest(new { message = "İstek gövdesi boş olamaz." });
+                }
+
+                Console.WriteLine($"[AI-Assist İSTEK] Ürün: '{request.ProductName}', Mod: '{request.Mode}', Şablon: '{request.CurrentTemplate}'");
 
                 var result = await aiService.AssistContentAsync(request);
+
+                Console.WriteLine("[AI-Assist BAŞARILI] Yanıt üretildi ve gönderiliyor.");
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = ex.Message, detail = ex.InnerException?.Message });
+                Console.WriteLine($"\n--- [AI-Assist KRİTİK HATA] ---\nMesaj: {ex.Message}\nDetay: {ex.InnerException?.Message}\nStackTrace: {ex.StackTrace}\n-----------------------------\n");
+
+                return StatusCode(500, new
+                {
+                    message = ex.Message,
+                    detail = ex.InnerException?.Message
+                });
             }
         }
     }
