@@ -31,11 +31,22 @@ namespace Launchify.Infrastructure.Services
 
         public GeminiAiService(IConfiguration configuration)
         {
-            _apiKey = configuration["Gemini:ApiKey"];
+            var key = configuration["Gemini:ApiKey"]
+                   ?? configuration["Gemini__ApiKey"]
+                   ?? configuration["GEMINI_API_KEY"]
+                   ?? string.Empty;
+
+            _apiKey = key.Trim().Trim('"', '\'');
         }
 
         public async Task<AiPageConfig> GenerateContentAsync(string productName, string themeType, string productDescription, Func<string, Task> logCallback)
         {
+            if (string.IsNullOrWhiteSpace(_apiKey))
+            {
+                await logCallback("❌ Hata: Gemini API anahtarı bulunamadı.");
+                throw new InvalidOperationException("Gemini API Key yapılandırmada bulunamadı.");
+            }
+
             await logCallback($"[Adım 1/4] '{productName}' için sistem analizi başlatıldı...");
             await Task.Delay(1000);
 
@@ -56,12 +67,7 @@ namespace Launchify.Infrastructure.Services
             {{ ""Title"": ""2. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }},
             {{ ""Title"": ""3. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }}
         ],
-        ""Faqs"": [
-        {{ ""Question"": ""Verilerimiz güvende mi?"", ""Answer"": ""Tüm altyapımız uçtan uca şifreleme ve kurumsal güvenlik standartlarıyla korunmaktadır."" }},
-        {{ ""Question"": ""Kurulum ne kadar sürer?"", ""Answer"": ""Bulut tabanlı altyapımız sayesinde dakikalar içinde kullanmaya başlayabilirsiniz."" }},
-        {{ ""Question"": ""Erken erişim avantajları nelerdir?"", ""Answer"": ""İlk kaydolan kurumsal kullanıcılarımıza özel indirimler ve öncelikli destek sağlanacaktır."" }}
-    ],
-        ""AccentColor"": ""{(themeType == "modern" ? "#2563EB" : "#0F172A")}""
+        ""AccentColor"": ""{(themeType == "modern" ? "#6366F1" : "#0F172A")}""
     }}";
 
             var requestBody = new
@@ -80,7 +86,7 @@ namespace Launchify.Infrastructure.Services
 
             foreach (var model in Models)
             {
-                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={_apiKey.Trim()}";
+                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={_apiKey}";
 
                 for (int attempt = 0; attempt < RetriesPerModel; attempt++)
                 {
@@ -136,7 +142,6 @@ namespace Launchify.Infrastructure.Services
                             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                         await logCallback("✅ İşlem Tamamlandı: Platformunuz canlıya alınmaya hazır!");
-
                         return result;
                     }
                     catch (TaskCanceledException ex)
@@ -189,18 +194,16 @@ SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra
             {
                 contents = new[]
                 {
-            new { parts = new[] { new { text = prompt } } }
-        },
+                    new { parts = new[] { new { text = prompt } } }
+                },
                 generationConfig = new { responseMimeType = "application/json" }
             };
 
             string payload = JsonSerializer.Serialize(requestBody);
-            string key = (_apiKey ?? "").Trim();
-            Exception lastError = null;
 
             foreach (var model in Models)
             {
-                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}";
+                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={_apiKey}";
 
                 try
                 {
@@ -208,11 +211,7 @@ SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra
                     using var response = await _httpClient.PostAsync(url, content);
                     var responseString = await response.Content.ReadAsStringAsync();
 
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        lastError = new Exception($"{model}: HTTP {(int)response.StatusCode} - {responseString}");
-                        continue;
-                    }
+                    if (!response.IsSuccessStatusCode) continue;
 
                     using var jsonDoc = JsonDocument.Parse(responseString);
                     var candidates = jsonDoc.RootElement.GetProperty("candidates");
@@ -234,14 +233,13 @@ SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra
 
                     if (result != null) return result;
                 }
-                catch (Exception ex)
+                catch
                 {
-                    lastError = ex;
                     continue;
                 }
             }
 
-            throw new AiServiceUnavailableException($"AI asistanı yanıt veremedi. Hata: {lastError?.Message}");
+            throw new AiServiceUnavailableException("AI asistanı şu anda yanıt veremedi.");
         }
     }
 }

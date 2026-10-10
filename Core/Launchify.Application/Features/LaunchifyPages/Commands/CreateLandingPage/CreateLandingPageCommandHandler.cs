@@ -3,6 +3,10 @@ using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage
 {
@@ -27,6 +31,8 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
 
         public async Task<CreateLandingResponse> Handle(CreateLandingPageCommand request, CancellationToken cancellationToken)
         {
+            bool creditDeducted = false;
+
             try
             {
                 if (string.IsNullOrWhiteSpace(request.UserId))
@@ -38,10 +44,24 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                     };
                 }
 
-                bool creditDeducted = await _userRepository.DeductCreditAsync(request.UserId);
+                creditDeducted = await _userRepository.DeductCreditAsync(request.UserId);
+
                 if (!creditDeducted)
                 {
-                    return new CreateLandingResponse { IsSuccess = false, Message = "Yeterli proje oluşturma krediniz bulunmuyor." };
+                    var existingPages = await _repository.GetByUserIdAsync(request.UserId);
+                    int count = existingPages != null ? existingPages.Count() : 0;
+
+                    if (count < 3)
+                    {
+                        _logger.LogInformation("Kullanıcı ({UserId}) 3'ten az projeye sahip ({Count}/3) fakat kredisi 0. Otomatik telafi ediliyor...", request.UserId, count);
+                        await _userRepository.RefundCreditAsync(request.UserId);
+                        creditDeducted = await _userRepository.DeductCreditAsync(request.UserId);
+                    }
+                }
+
+                if (!creditDeducted)
+                {
+                    return new CreateLandingResponse { IsSuccess = false, Message = "Yeterli proje oluşturma krediniz bulunmuyor. Maksimum 3 aktif proje oluşturabilirsiniz." };
                 }
 
                 _logger.LogInformation("Creating new landing page for product: {ProductName}", request.ProductName);
@@ -54,8 +74,9 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                     request.ProductName,
                     request.ThemeType,
                     request.ProductDescription,
-                    request.LogCallback ?? (async (_) => await Task.CompletedTask) 
+                    request.LogCallback ?? (async (_) => await Task.CompletedTask)
                 );
+
                 var newPage = new LandingPage
                 {
                     Id = Guid.NewGuid(),
@@ -85,12 +106,25 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
             }
             catch (Exception ex)
             {
+                if (creditDeducted)
+                {
+                    try
+                    {
+                        await _userRepository.RefundCreditAsync(request.UserId);
+                        _logger.LogWarning("İşlem patladığı için kullanıcıya ({UserId}) 1 kredisi iade edildi.", request.UserId);
+                    }
+                    catch (Exception refundEx)
+                    {
+                        _logger.LogError(refundEx, "Kredi geri iadesi sırasında hata.");
+                    }
+                }
+
                 Console.WriteLine($"\n--- KRİTİK HATA BAŞLANGICI ---\n{ex.ToString()}\n--- KRİTİK HATA BİTİŞİ ---\n");
 
                 return new CreateLandingResponse
                 {
                     IsSuccess = false,
-                    Message = "Platform oluşturulurken sunucu kaynaklı bir sorun meydana geldi."
+                    Message = "Platform oluşturulurken sunucu kaynaklı bir sorun meydana geldi: " + ex.Message
                 };
             }
         }
