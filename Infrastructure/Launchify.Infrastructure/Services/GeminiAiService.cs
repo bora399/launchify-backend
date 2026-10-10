@@ -1,4 +1,5 @@
-﻿using Launchify.Application.Interfaces;
+﻿using Launchify.Application.DTOs;
+using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
 using Microsoft.Extensions.Configuration;
 using System;
@@ -8,7 +9,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-// Not: Namespace'i kendi projendeki haline (Launchify veya Masalimiz) göre ayarlarsın.
 namespace Launchify.Infrastructure.Services
 {
     public class AiServiceUnavailableException : Exception
@@ -75,7 +75,7 @@ namespace Launchify.Infrastructure.Services
 
             foreach (var model in Models)
             {
-                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_apiKey.Trim()}";
+                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={_apiKey.Trim()}";
 
                 for (int attempt = 0; attempt < RetriesPerModel; attempt++)
                 {
@@ -149,6 +149,86 @@ namespace Launchify.Infrastructure.Services
 
             await logCallback("❌ Hata: Tüm AI modelleri denendi ancak sunucu yanıt vermiyor. Lütfen daha sonra tekrar deneyin.");
             throw new AiServiceUnavailableException("AI servisi şu an yoğun.", lastError);
+        }
+
+        // YENİ: Editör içi anlık metin ve stil asistanı
+        public async Task<AiAssistResult> AssistContentAsync(AiAssistRequest request)
+        {
+            string modeDirective = request.Mode switch
+            {
+                "punchy" => "Metinleri iddialı, enerjik, merak uyandıran ve harekete geçirici startup/indie-hacker dilinde yeniden yaz.",
+                "corporate" => "Metinleri güven veren, B2B SaaS uyumlu, kurumsal ve profesyonel bir dille yeniden yaz.",
+                "minimal" => "Metinleri olabildiğince az kelimeyle, net, zarif ve minimalist bir dille yeniden yaz.",
+                "redesign" => "Ürünün değer önerisine en uygun şablonu (Aurora, Brutal, Corporate, Minimal arasından BİRİ) ve en uyumlu HEX vurgu rengini seç.",
+                _ => "Metinleri dönüşüm oranını maksimize edecek şekilde optimize et."
+            };
+
+            string prompt = $@"
+Sen uzman bir SaaS büyüme danışmanı ve sanat yönetmenisin.
+Ürün Adı: {request.ProductName}
+Mevcut Başlık: {request.CurrentTitle}
+Mevcut Açıklama: {request.CurrentCopy}
+Mevcut Şablon: {request.CurrentTemplate}
+
+GÖREVİN: {modeDirective}
+
+SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra metin ekleme:
+{{
+  ""HeroTitle"": ""Yeni veya optimize edilmiş başlık"",
+  ""MarketingCopy"": ""Yeni veya optimize edilmiş açıklama (25-35 kelime)"",
+  ""CallToActionText"": ""2-3 kelimelik etkili buton metni"",
+  ""SuggestedTemplate"": ""{(request.Mode == "redesign" ? "Aurora, Brutal, Corporate veya Minimal" : request.CurrentTemplate)}"",
+  ""SuggestedAccentColor"": ""{(request.Mode == "redesign" ? "#6366F1" : "#3B82F6")}""
+}}";
+
+            var requestBody = new
+            {
+                contents = new[]
+                {
+                    new { parts = new[] { new { text = prompt } } }
+                },
+                generationConfig = new { responseMimeType = "application/json" }
+            };
+
+            string payload = JsonSerializer.Serialize(requestBody);
+
+            foreach (var model in Models)
+            {
+                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={_apiKey.Trim()}";
+
+                try
+                {
+                    using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+                    using var response = await _httpClient.PostAsync(url, content);
+                    var responseString = await response.Content.ReadAsStringAsync();
+
+                    if (!response.IsSuccessStatusCode) continue;
+
+                    using var jsonDoc = JsonDocument.Parse(responseString);
+                    var textResult = jsonDoc.RootElement
+                        .GetProperty("candidates")[0]
+                        .GetProperty("content")
+                        .GetProperty("parts")[0]
+                        .GetProperty("text").GetString();
+
+                    if (!string.IsNullOrEmpty(textResult))
+                    {
+                        textResult = textResult.Replace("```json", "").Replace("```", "").Trim();
+                    }
+
+                    var result = JsonSerializer.Deserialize<AiAssistResult>(
+                        textResult,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (result != null) return result;
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            throw new AiServiceUnavailableException("AI asistanı şu anda yanıt veremedi.");
         }
     }
 }

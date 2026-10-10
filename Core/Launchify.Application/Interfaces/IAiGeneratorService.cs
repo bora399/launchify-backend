@@ -1,4 +1,5 @@
-﻿using Launchify.Domain.Entities;
+﻿using Launchify.Application.DTOs;
+using Launchify.Domain.Entities;
 using System;
 using System.Threading.Tasks;
 
@@ -12,5 +13,7 @@ namespace Launchify.Application.Interfaces
             string productDescription,
             Func<string, Task> logCallback
         );
+
+        Task<AiAssistResult> AssistContentAsync(AiAssistRequest request);
     }
 }

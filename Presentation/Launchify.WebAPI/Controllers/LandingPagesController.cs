@@ -148,5 +148,19 @@ namespace Launchify.WebAPI.Controllers
                 return StatusCode(500, new { message = $"Sunucu hatası: {ex.Message}" });
             }
         }
+
+        [HttpPost("ai-assist")]
+        public async Task<IActionResult> AiAssist([FromBody] AiAssistRequest request, [FromServices] IAiGeneratorService aiService)
+        {
+            try
+            {
+                var result = await aiService.AssistContentAsync(request);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "AI önerisi alınırken bir hata oluştu: " + ex.Message });
+            }
+        }
     }
 }
