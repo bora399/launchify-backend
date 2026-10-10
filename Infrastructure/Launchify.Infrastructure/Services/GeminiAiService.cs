@@ -151,7 +151,6 @@ namespace Launchify.Infrastructure.Services
             throw new AiServiceUnavailableException("AI servisi şu an yoğun.", lastError);
         }
 
-        // YENİ: Editör içi anlık metin ve stil asistanı
         public async Task<AiAssistResult> AssistContentAsync(AiAssistRequest request)
         {
             string modeDirective = request.Mode switch
@@ -185,16 +184,18 @@ SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra
             {
                 contents = new[]
                 {
-                    new { parts = new[] { new { text = prompt } } }
-                },
+            new { parts = new[] { new { text = prompt } } }
+        },
                 generationConfig = new { responseMimeType = "application/json" }
             };
 
             string payload = JsonSerializer.Serialize(requestBody);
+            string key = (_apiKey ?? "").Trim();
+            Exception lastError = null;
 
             foreach (var model in Models)
             {
-                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={_apiKey.Trim()}";
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}";
 
                 try
                 {
@@ -202,11 +203,17 @@ SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra
                     using var response = await _httpClient.PostAsync(url, content);
                     var responseString = await response.Content.ReadAsStringAsync();
 
-                    if (!response.IsSuccessStatusCode) continue;
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        lastError = new Exception($"{model}: HTTP {(int)response.StatusCode} - {responseString}");
+                        continue;
+                    }
 
                     using var jsonDoc = JsonDocument.Parse(responseString);
-                    var textResult = jsonDoc.RootElement
-                        .GetProperty("candidates")[0]
+                    var candidates = jsonDoc.RootElement.GetProperty("candidates");
+                    if (candidates.GetArrayLength() == 0) continue;
+
+                    var textResult = candidates[0]
                         .GetProperty("content")
                         .GetProperty("parts")[0]
                         .GetProperty("text").GetString();
@@ -222,13 +229,14 @@ SADECE aşağıdaki formatta saf bir JSON objesi dön. Asla Markdown veya ekstra
 
                     if (result != null) return result;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    lastError = ex;
                     continue;
                 }
             }
 
-            throw new AiServiceUnavailableException("AI asistanı şu anda yanıt veremedi.");
+            throw new AiServiceUnavailableException($"AI asistanı yanıt veremedi. Hata: {lastError?.Message}");
         }
     }
 }
