@@ -86,8 +86,8 @@ namespace Launchify.Infrastructure.Services
 
             foreach (var model in Models)
             {
-                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={_apiKey}";
-
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_apiKey.Trim()}";
+                
                 for (int attempt = 0; attempt < RetriesPerModel; attempt++)
                 {
                     try
