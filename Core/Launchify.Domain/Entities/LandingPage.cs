@@ -26,6 +26,8 @@ namespace Launchify.Domain.Entities
 
         public string CallToActionText { get; set; }
         public List<FeatureItem> Features { get; set; } = new List<FeatureItem>();
+
+        public List<FaqItem> Faqs { get; set; } = new();
     }
 
 

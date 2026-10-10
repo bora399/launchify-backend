@@ -56,6 +56,11 @@ namespace Launchify.Infrastructure.Services
             {{ ""Title"": ""2. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }},
             {{ ""Title"": ""3. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }}
         ],
+        ""Faqs"": [
+        {{ ""Question"": ""Verilerimiz güvende mi?"", ""Answer"": ""Tüm altyapımız uçtan uca şifreleme ve kurumsal güvenlik standartlarıyla korunmaktadır."" }},
+        {{ ""Question"": ""Kurulum ne kadar sürer?"", ""Answer"": ""Bulut tabanlı altyapımız sayesinde dakikalar içinde kullanmaya başlayabilirsiniz."" }},
+        {{ ""Question"": ""Erken erişim avantajları nelerdir?"", ""Answer"": ""İlk kaydolan kurumsal kullanıcılarımıza özel indirimler ve öncelikli destek sağlanacaktır."" }}
+    ],
         ""AccentColor"": ""{(themeType == "modern" ? "#2563EB" : "#0F172A")}""
     }}";
 

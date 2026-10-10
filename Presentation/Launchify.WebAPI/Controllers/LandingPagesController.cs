@@ -150,16 +150,21 @@ namespace Launchify.WebAPI.Controllers
         }
 
         [HttpPost("ai-assist")]
-        public async Task<IActionResult> AiAssist([FromBody] AiAssistRequest request, [FromServices] IAiGeneratorService aiService)
+        public async Task<IActionResult> AiAssist(
+        [FromBody] Launchify.Application.DTOs.AiAssistRequest request,
+        [FromServices] IAiGeneratorService aiService) 
         {
             try
             {
+                if (request == null)
+                    return BadRequest(new { message = "İstek gövdesi boş olamaz." });
+
                 var result = await aiService.AssistContentAsync(request);
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "AI önerisi alınırken bir hata oluştu: " + ex.Message });
+                return StatusCode(500, new { message = ex.Message, detail = ex.InnerException?.Message });
             }
         }
     }
