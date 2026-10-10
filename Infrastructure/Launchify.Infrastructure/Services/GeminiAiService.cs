@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Launchify.Infrastructure.Services
@@ -21,22 +22,27 @@ namespace Launchify.Infrastructure.Services
     {
         private readonly string _apiKey;
 
+        // BaseAddress tanımlandığı için "BaseAddress must be set" hatası artık oluşamaz
         private static readonly HttpClient _httpClient = new HttpClient
         {
+            BaseAddress = new Uri("https://generativelanguage.googleapis.com/"),
             Timeout = TimeSpan.FromSeconds(60)
         };
 
-        private static readonly string[] Models = { "gemini-3.8-flash", "gemini-3.5-flash-lite" };
+        private static readonly string[] Models = { "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-1.5-flash" };
         private const int RetriesPerModel = 3;
 
         public GeminiAiService(IConfiguration configuration)
         {
-            var key = configuration["Gemini:ApiKey"]
-                   ?? configuration["Gemini__ApiKey"]
-                   ?? configuration["GEMINI_API_KEY"]
-                   ?? string.Empty;
+            var rawKey = configuration["Gemini:ApiKey"]
+                      ?? configuration["Gemini__ApiKey"]
+                      ?? configuration["GEMINI_API_KEY"]
+                      ?? Environment.GetEnvironmentVariable("Gemini__ApiKey")
+                      ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY")
+                      ?? string.Empty;
 
-            _apiKey = key.Trim().Trim('"', '\'');
+            // Tırnak işaretlerini (", '), boşlukları ve satır sonlarını tamamen temizle
+            _apiKey = Regex.Replace(rawKey ?? string.Empty, @"[\s""']+", "");
         }
 
         public async Task<AiPageConfig> GenerateContentAsync(string productName, string themeType, string productDescription, Func<string, Task> logCallback)
@@ -48,65 +54,60 @@ namespace Launchify.Infrastructure.Services
             }
 
             await logCallback($"[Adım 1/4] '{productName}' için sistem analizi başlatıldı...");
-            await Task.Delay(1000);
+            await Task.Delay(500);
 
             string prompt = $@"
-    Sen uzman bir ürün pazarlama stratejisti, dönüşüm oranı optimizasyonu (CRO) uzmanı ve metin yazarısın. Yeni bir yazılım/ürün için e-posta toplamaya (Lead Capture) yönelik, yüksek dönüşüm odaklı bir açılış sayfası (Landing Page) içeriği üreteceksin.
+    Sen uzman bir ürün pazarlama stratejisti, CRO uzmanı ve metin yazarısın. Yeni bir yazılım/ürün için e-posta toplamaya (Lead Capture) yönelik, yüksek dönüşüm odaklı bir açılış sayfası içeriği üreteceksin.
     
     Ürün / Girişim Adı: {productName} 
-    Marka Tonu: {(themeType == "modern" ? "Modern, yenilikçi ve teknolojik (Startup tarzı)" : "Kurumsal, güvenilir ve ciddi (B2B tarzı)")}
+    Marka Tonu: {(themeType == "modern" ? "Modern, teknolojik (Startup tarzı)" : "Kurumsal, güvenilir (B2B tarzı)")}
     Ürünün Özellikleri / Amacı: {productDescription}
 
-    SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown (```json gibi) veya ekstra metin ekleme:
+    SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya ekstra metin ekleme:
     {{
-        ""AiGeneratedHeroTitle"": ""Ürünün ana değer önerisini (value proposition) anlatan kısa ve vurucu başlık."",
-        ""AiGeneratedMarketingCopy"": ""Ürünün özelliklerini müşteriye fayda sağlayacak şekilde anlatan, yaklaşık 30-40 kelimelik ikna edici alt metin."",
-        ""CallToActionText"": ""Kullanıcıyı e-posta bırakmaya itecek 2-3 kelimelik vurucu buton metni (Örn: Erken Erişime Katıl, Ücretsiz Başla)."",
+        ""AiGeneratedHeroTitle"": ""Ürünün ana değer önerisini anlatan kısa ve vurucu başlık."",
+        ""AiGeneratedMarketingCopy"": ""Ürünün özelliklerini müşteriye fayda sağlayacak şekilde anlatan 30-40 kelimelik ikna edici alt metin."",
+        ""CallToActionText"": ""2-3 kelimelik vurucu buton metni"",
         ""Features"": [
-            {{ ""Title"": ""1. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }},
-            {{ ""Title"": ""2. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }},
-            {{ ""Title"": ""3. Özelliğin Vurucu Başlığı"", ""Description"": ""Bu özelliğin kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }}
+            {{ ""Title"": ""1. Özellik Başlığı"", ""Description"": ""Kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }},
+            {{ ""Title"": ""2. Özellik Başlığı"", ""Description"": ""Kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }},
+            {{ ""Title"": ""3. Özellik Başlığı"", ""Description"": ""Kullanıcıya sağladığı spesifik faydayı anlatan 1-2 cümlelik açıklama."" }}
         ],
         ""AccentColor"": ""{(themeType == "modern" ? "#6366F1" : "#0F172A")}""
     }}";
 
             var requestBody = new
             {
-                contents = new[]
-                {
-                    new { parts = new[] { new { text = prompt } } }
-                },
+                contents = new[] { new { parts = new[] { new { text = prompt } } } },
                 generationConfig = new { responseMimeType = "application/json" }
             };
 
             string payload = JsonSerializer.Serialize(requestBody);
+            string safeKey = Uri.EscapeDataString(_apiKey);
             Exception lastError = null;
 
             await logCallback("[Adım 2/4] B2B/SaaS platform mimarisi tasarlanıyor...");
 
             foreach (var model in Models)
             {
-                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_apiKey.Trim()}";
-                
+                // BaseAddress tanımlı olduğu için relative path kullanımı güvenlidir
+                string relativePath = $"v1beta/models/{model}:generateContent?key={safeKey}";
+
                 for (int attempt = 0; attempt < RetriesPerModel; attempt++)
                 {
                     try
                     {
-                        await logCallback($"[Adım 3/4] AI motoru ile iletişim kuruluyor (Model: {model} - Deneme: {attempt + 1})...");
+                        await logCallback($"[Adım 3/4] AI motoru ile iletişim kuruluyor ({model} - Deneme: {attempt + 1})...");
 
                         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
-                        using var response = await _httpClient.PostAsync(url, content);
+                        using var response = await _httpClient.PostAsync(relativePath, content);
                         var responseString = await response.Content.ReadAsStringAsync();
 
                         if (response.StatusCode == HttpStatusCode.ServiceUnavailable ||
                             response.StatusCode == HttpStatusCode.TooManyRequests)
                         {
                             lastError = new Exception($"{model}: {(int)response.StatusCode} - {responseString}");
-
-                            var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)) +
-                                        TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500));
-
-                            await logCallback($"[Uyarı] Sunucu yoğunluğu tespit edildi. {delay.TotalSeconds:F1} saniye sonra tekrar deneniyor...");
+                            var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
                             await Task.Delay(delay);
                             continue;
                         }
@@ -114,7 +115,6 @@ namespace Launchify.Infrastructure.Services
                         if (response.StatusCode == HttpStatusCode.NotFound)
                         {
                             lastError = new Exception($"{model}: 404 - {responseString}");
-                            await logCallback($"[Bilgi] {model} modeline ulaşılamadı. Alternatif modele geçiliyor...");
                             break;
                         }
 
@@ -130,42 +130,41 @@ namespace Launchify.Infrastructure.Services
                             .GetProperty("parts")[0]
                             .GetProperty("text").GetString();
 
-                        await logCallback("[Adım 4/4] Yanıt başarıyla alındı. React bileşenleri oluşturuluyor...");
+                        await logCallback("[Adım 4/4] Yanıt başarıyla alındı...");
 
-                        if (!string.IsNullOrEmpty(textResult))
-                        {
-                            textResult = textResult.Replace("```json", "").Replace("```", "").Trim();
-                        }
+                        string cleanJson = ExtractJson(textResult);
 
                         var result = JsonSerializer.Deserialize<AiPageConfig>(
-                            textResult,
+                            cleanJson,
                             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                        await logCallback("✅ İşlem Tamamlandı: Platformunuz canlıya alınmaya hazır!");
+                        await logCallback("✅ İşlem Tamamlandı!");
                         return result;
                     }
                     catch (TaskCanceledException ex)
                     {
                         lastError = ex;
-                        await logCallback("[Hata] Bağlantı zaman aşımına uğradı. Yeniden deneniyor...");
                     }
                     catch (HttpRequestException ex)
                     {
                         lastError = ex;
-                        await logCallback("[Hata] Ağ erişim sorunu yaşandı. Yeniden deneniyor...");
                     }
                 }
             }
 
-            await logCallback("❌ Hata: Tüm AI modelleri denendi ancak sunucu yanıt vermiyor. Lütfen daha sonra tekrar deneyin.");
-            throw new AiServiceUnavailableException("AI servisi şu an yoğun.", lastError);
+            throw new AiServiceUnavailableException("AI servisi şu an yanıt veremiyor.", lastError);
         }
 
         public async Task<AiAssistResult> AssistContentAsync(AiAssistRequest request)
         {
+            if (string.IsNullOrWhiteSpace(_apiKey))
+            {
+                throw new InvalidOperationException("Gemini API Key yapılandırmada bulunamadı.");
+            }
+
             string modeDirective = request.Mode switch
             {
-                "punchy" => "Metinleri iddialı, enerjik, merak uyandıran ve harekete geçirici startup/indie-hacker dilinde yeniden yaz.",
+                "punchy" => "Metinleri iddialı, enerjik, merak uyandıran ve harekete geçirici startup dilinde yeniden yaz.",
                 "corporate" => "Metinleri güven veren, B2B SaaS uyumlu, kurumsal ve profesyonel bir dille yeniden yaz.",
                 "minimal" => "Metinleri olabildiğince az kelimeyle, net, zarif ve minimalist bir dille yeniden yaz.",
                 "redesign" => "Ürünün değer önerisine en uygun şablonu (Aurora, Brutal, Corporate, Minimal arasından BİRİ) ve en uyumlu HEX vurgu rengini seç.",
@@ -181,44 +180,37 @@ Mevcut Şablon: {request.CurrentTemplate}
 
 GÖREVİN: {modeDirective}
 
-SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya fazladan açıklama metni ekleme:
+SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya ekstra metin ekleme:
 {{
-  ""HeroTitle"": ""Yeni veya optimize edilmiş başlık"",
-  ""MarketingCopy"": ""Yeni veya optimize edilmiş açıklama (25-35 kelime)"",
-  ""CallToActionText"": ""2-3 kelimelik etkili buton metni"",
+  ""HeroTitle"": ""Yeni başlık"",
+  ""MarketingCopy"": ""Yeni açıklama (25-35 kelime)"",
+  ""CallToActionText"": ""2-3 kelimelik buton metni"",
   ""SuggestedTemplate"": ""{(request.Mode == "redesign" ? "Aurora, Brutal, Corporate veya Minimal" : request.CurrentTemplate)}"",
   ""SuggestedAccentColor"": ""{(request.Mode == "redesign" ? "#6366F1" : "#3B82F6")}""
 }}";
 
             var requestBody = new
             {
-                contents = new[]
-                {
-                    new { parts = new[] { new { text = prompt } } }
-                },
+                contents = new[] { new { parts = new[] { new { text = prompt } } } },
                 generationConfig = new { responseMimeType = "application/json" }
             };
 
             string payload = JsonSerializer.Serialize(requestBody);
-            string key = (_apiKey ?? string.Empty).Trim();
+            string safeKey = Uri.EscapeDataString(_apiKey);
             Exception lastError = null;
 
-            // Kendi modellerin öncelikli, ardından yedekler
-            string[] assistModels = { "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash" };
-
-            foreach (var model in assistModels)
+            foreach (var model in Models)
             {
-                string url = $"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){model}:generateContent?key={key}";
+                string relativePath = $"v1beta/models/{model}:generateContent?key={safeKey}";
 
                 try
                 {
                     using var content = new StringContent(payload, Encoding.UTF8, "application/json");
-                    using var response = await _httpClient.PostAsync(url, content);
+                    using var response = await _httpClient.PostAsync(relativePath, content);
                     var responseString = await response.Content.ReadAsStringAsync();
 
                     if (!response.IsSuccessStatusCode)
                     {
-                        Console.WriteLine($"[AI Assist Uyarı] Model '{model}' hata verdi: {(int)response.StatusCode} - {responseString}");
                         lastError = new Exception($"{model}: HTTP {(int)response.StatusCode} - {responseString}");
                         continue;
                     }
@@ -228,7 +220,6 @@ SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya f
 
                     if (!root.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
                     {
-                        Console.WriteLine($"[AI Assist Uyarı] Model '{model}' boş candidate döndürdü.");
                         continue;
                     }
 
@@ -239,15 +230,7 @@ SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya f
 
                     if (string.IsNullOrWhiteSpace(textResult)) continue;
 
-                    // GÜVENLİ JSON AYIKLAMA (Markdown ve selamlama metinlerini temizler)
-                    string cleanJson = textResult.Trim();
-                    int firstBrace = cleanJson.IndexOf('{');
-                    int lastBrace = cleanJson.LastIndexOf('}');
-
-                    if (firstBrace >= 0 && lastBrace > firstBrace)
-                    {
-                        cleanJson = cleanJson.Substring(firstBrace, lastBrace - firstBrace + 1);
-                    }
+                    string cleanJson = ExtractJson(textResult);
 
                     var result = JsonSerializer.Deserialize<AiAssistResult>(
                         cleanJson,
@@ -257,13 +240,25 @@ SADECE aşağıdaki formatta geçerli bir JSON objesi dön. Asla Markdown veya f
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[AI Assist Hata] Model '{model}': {ex.Message}");
                     lastError = ex;
                     continue;
                 }
             }
 
-            throw new AiServiceUnavailableException($"AI asistanı yanıt veremedi. Son Hata: {lastError?.Message}");
+            throw new AiServiceUnavailableException($"AI asistanı yanıt veremedi. Hata: {lastError?.Message}");
+        }
+
+        private static string ExtractJson(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "{}";
+            string text = input.Replace("```json", "").Replace("```", "").Trim();
+            int firstBrace = text.IndexOf('{');
+            int lastBrace = text.LastIndexOf('}');
+            if (firstBrace >= 0 && lastBrace > firstBrace)
+            {
+                return text.Substring(firstBrace, lastBrace - firstBrace + 1);
+            }
+            return text;
         }
     }
 }
