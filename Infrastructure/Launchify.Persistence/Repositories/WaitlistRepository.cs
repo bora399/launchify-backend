@@ -4,6 +4,7 @@ using Launchify.Domain.Entities;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Launchify.Infrastructure.Repositories
@@ -18,6 +19,19 @@ namespace Launchify.Infrastructure.Repositories
             _firestoreDb = FirestoreDb.Create(projectId);
         }
 
+        public async Task<bool> ExistsAsync(string pageId, string email)
+        {
+            string normalizedEmail = email.Trim().ToLowerInvariant();
+
+            var query = _firestoreDb.Collection("Waitlists")
+                .WhereEqualTo("PageId", pageId)
+                .WhereEqualTo("Email", normalizedEmail)
+                .Limit(1);
+
+            var snapshot = await query.GetSnapshotAsync();
+            return snapshot.Documents.Count > 0;
+        }
+
         public async Task AddAsync(WaitlistEntry entry)
         {
             var docRef = _firestoreDb.Collection("Waitlists").Document(entry.Id.ToString());
@@ -26,7 +40,7 @@ namespace Launchify.Infrastructure.Repositories
             {
                 { "Id", entry.Id.ToString() },
                 { "PageId", entry.PageId },
-                { "Email", entry.Email },
+                { "Email", entry.Email.Trim().ToLowerInvariant() },
                 { "CreatedAt", entry.CreatedAt.ToUniversalTime() }
             };
 

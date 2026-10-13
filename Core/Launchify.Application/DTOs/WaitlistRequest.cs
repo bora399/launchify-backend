@@ -10,5 +10,6 @@ namespace Launchify.Application.DTOs
     {
         public string PageId { get; set; }
         public string Email { get; set; }
+        public string? Honeypot { get; set; }
     }
 }

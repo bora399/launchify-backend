@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
@@ -19,6 +20,7 @@ namespace Launchify.WebAPI.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         public async Task<IActionResult> JoinWaitlist([FromBody] WaitlistRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.PageId))
@@ -26,11 +28,25 @@ namespace Launchify.WebAPI.Controllers
                 return BadRequest("Email and PageId are required.");
             }
 
+            if (!string.IsNullOrWhiteSpace(request.Honeypot))
+            {
+                return Ok(new { message = "Successfully joined the waitlist." });
+            }
+
+            string cleanEmail = request.Email.Trim().ToLowerInvariant();
+
+            bool alreadyExists = await _waitlistRepository.ExistsAsync(request.PageId, cleanEmail);
+            if (alreadyExists)
+            {
+                return StatusCode(409, new { message = "Bu e-posta adresi zaten bekleme listesinde kayıtlı." });
+            }
+
             var entry = new WaitlistEntry
             {
                 Id = Guid.NewGuid(),
                 PageId = request.PageId,
-                Email = request.Email
+                Email = cleanEmail,
+                CreatedAt = DateTime.UtcNow
             };
 
             await _waitlistRepository.AddAsync(entry);

@@ -7,6 +7,7 @@ namespace Launchify.Application.Interfaces
     public interface IWaitlistRepository
     {
         Task AddAsync(WaitlistEntry entry);
-        Task<IEnumerable<WaitlistEntry>> GetByPageIdAsync(string pageId); 
+        Task<IEnumerable<WaitlistEntry>> GetByPageIdAsync(string pageId);
+        Task<bool> ExistsAsync(string pageId, string email); 
     }
 }
