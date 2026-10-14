@@ -2,12 +2,16 @@
 using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
 using Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPage;
 using Launchify.Application.Interfaces;
+using Launchify.Domain.Entities;
 using LaunchifyBackend.Hubs;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Caching.Memory;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Launchify.WebAPI.Controllers
@@ -17,8 +21,31 @@ namespace Launchify.WebAPI.Controllers
     public class LandingPagesController(
         IMediator mediator,
         ILandingPageRepository repository,
-        IHubContext<GenerationHub> hubContext) : ControllerBase
+        IHubContext<GenerationHub> hubContext,
+        IMemoryCache cache) : ControllerBase
     {
+        private void InvalidateProjectCache(string? userId, string? slug)
+        {
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                cache.Remove($"user_projects_{userId}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(slug))
+            {
+                cache.Remove($"page_slug_{slug.Trim().ToLowerInvariant()}");
+            }
+
+            Console.WriteLine($"[CACHE INVALIDATION] UserId: '{userId}', Slug: '{slug}' önbellekten temizlendi.");
+        }
+
+        [HttpGet("ping")]
+        [AllowAnonymous]
+        public IActionResult Ping()
+        {
+            return Ok(new { status = "awake", timestamp = DateTime.UtcNow });
+        }
+
         [HttpPost("create")]
         [EnableRateLimiting("AiCreationLimit")]
         public async Task<IActionResult> CreateLandingPage([FromBody] CreateLandingPageCommand command)
@@ -35,6 +62,8 @@ namespace Launchify.WebAPI.Controllers
 
             if (response.IsSuccess)
             {
+                InvalidateProjectCache(command.UserId, response.Slug);
+
                 return Ok(new { id = response.GeneratedPageId, slug = response.Slug, message = response.Message });
             }
 
@@ -49,31 +78,68 @@ namespace Launchify.WebAPI.Controllers
                 return BadRequest(new { message = "UserId parametresi gereklidir." });
             }
 
+            string cacheKey = $"user_projects_{userId}";
+
+            if (cache.TryGetValue(cacheKey, out IEnumerable<LandingPage>? cachedProjects) && cachedProjects != null)
+            {
+                Response.Headers["X-Cache"] = "HIT";
+                return Ok(cachedProjects);
+            }
+
             var projects = await repository.GetByUserIdAsync(userId);
+
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetSlidingExpiration(TimeSpan.FromSeconds(45))
+                .SetAbsoluteExpiration(TimeSpan.FromSeconds(90));
+
+            cache.Set(cacheKey, projects, cacheOptions);
+
+            Response.Headers["X-Cache"] = "MISS";
             return Ok(projects);
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteLandingPage(string id, [FromQuery] string userId)
         {
+            var existingPage = await repository.GetByIdAsync(id);
+
             var command = new DeleteLandingPageCommand { PageId = id, UserId = userId };
             var response = await mediator.Send(command);
 
-            if (response.IsSuccess) return Ok(response);
+            if (response.IsSuccess)
+            {
+                InvalidateProjectCache(userId, existingPage?.Slug);
+                return Ok(response);
+            }
 
             return BadRequest(new { message = response.Message });
         }
 
         [HttpGet("{slug}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetLandingPageBySlug(string slug)
         {
+            if (string.IsNullOrWhiteSpace(slug))
+            {
+                return BadRequest(new { message = "Slug gereklidir." });
+            }
+
+            string normalizedSlug = slug.Trim().ToLowerInvariant();
+            string cacheKey = $"page_slug_{normalizedSlug}";
+
+            if (cache.TryGetValue(cacheKey, out object? cachedPageDto) && cachedPageDto != null)
+            {
+                Response.Headers["X-Cache"] = "HIT";
+                return Ok(cachedPageDto);
+            }
+
             var pageData = await repository.GetBySlugAsync(slug);
             if (pageData == null)
             {
                 return NotFound(new { message = "Bu isme ait bir platform bulunamadı." });
             }
 
-            return Ok(new
+            var responseDto = new
             {
                 id = pageData.Id.ToString(),
                 slug = pageData.Slug,
@@ -89,7 +155,17 @@ namespace Launchify.WebAPI.Controllers
                     callToActionText = pageData.AiConfig?.CallToActionText,
                     features = pageData.AiConfig?.Features
                 }
-            });
+            };
+
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetSlidingExpiration(TimeSpan.FromMinutes(15))
+                .SetAbsoluteExpiration(TimeSpan.FromHours(1))
+                .SetPriority(CacheItemPriority.High);
+
+            cache.Set(cacheKey, responseDto, cacheOptions);
+
+            Response.Headers["X-Cache"] = "MISS";
+            return Ok(responseDto);
         }
 
         [HttpPut("{id}")]
@@ -123,7 +199,7 @@ namespace Launchify.WebAPI.Controllers
 
                 if (existingPage.AiConfig == null)
                 {
-                    existingPage.AiConfig = new Launchify.Domain.Entities.AiPageConfig();
+                    existingPage.AiConfig = new AiPageConfig();
                 }
 
                 if (!string.IsNullOrWhiteSpace(request.HeroTitle))
@@ -140,6 +216,8 @@ namespace Launchify.WebAPI.Controllers
 
                 await repository.UpdateAsync(existingPage);
 
+                InvalidateProjectCache(existingPage.UserId, existingPage.Slug);
+
                 return Ok(new { message = "Proje başarıyla güncellendi.", page = existingPage });
             }
             catch (Exception ex)
@@ -150,10 +228,10 @@ namespace Launchify.WebAPI.Controllers
         }
 
         [HttpPost("ai-assist")]
-        [Microsoft.AspNetCore.Authorization.AllowAnonymous] 
+        [AllowAnonymous]
         public async Task<IActionResult> AiAssist(
-                    [FromBody] Launchify.Application.DTOs.AiAssistRequest request,
-                    [FromServices] IAiGeneratorService aiService)
+            [FromBody] AiAssistRequest request,
+            [FromServices] IAiGeneratorService aiService)
         {
             try
             {

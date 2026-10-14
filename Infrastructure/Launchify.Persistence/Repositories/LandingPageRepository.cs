@@ -1,7 +1,6 @@
 ﻿using Google.Cloud.Firestore;
 using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
-using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,11 +11,9 @@ namespace Launchify.Infrastructure.Repositories
     public class LandingPageRepository : ILandingPageRepository
     {
         private readonly FirestoreDb _firestoreDb;
-
-        public LandingPageRepository(IConfiguration configuration)
+        public LandingPageRepository(FirestoreDb firestoreDb)
         {
-            string projectId = configuration["Firebase:ProjectId"];
-            _firestoreDb = FirestoreDb.Create(projectId);
+            _firestoreDb = firestoreDb;
         }
 
         public async Task AddAsync(LandingPage page)
@@ -65,7 +62,6 @@ namespace Launchify.Infrastructure.Repositories
                 return MapSnapshotToLandingPage(snapshot);
             }
 
-            // Document ID eşleşmezse içindeki Id string alanı üzerinden sorgula
             var query = _firestoreDb.Collection("LandingPages").WhereEqualTo("Id", id);
             var querySnapshot = await query.GetSnapshotAsync();
             if (querySnapshot.Documents.Count > 0)
@@ -90,7 +86,6 @@ namespace Launchify.Infrastructure.Repositories
                 return MapSnapshotToLandingPage(document);
             }
 
-            // Küçük harf slug alternatifi
             var queryLower = _firestoreDb.Collection("LandingPages").WhereEqualTo("slug", slug);
             var snapshotLower = await queryLower.GetSnapshotAsync();
             var docLower = snapshotLower.Documents.FirstOrDefault();

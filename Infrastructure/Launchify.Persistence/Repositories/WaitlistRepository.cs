@@ -1,7 +1,6 @@
 ﻿using Google.Cloud.Firestore;
 using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
-using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,11 +11,9 @@ namespace Launchify.Infrastructure.Repositories
     public class WaitlistRepository : IWaitlistRepository
     {
         private readonly FirestoreDb _firestoreDb;
-
-        public WaitlistRepository(IConfiguration configuration)
+        public WaitlistRepository(FirestoreDb firestoreDb)
         {
-            string projectId = configuration["Firebase:ProjectId"];
-            _firestoreDb = FirestoreDb.Create(projectId);
+            _firestoreDb = firestoreDb;
         }
 
         public async Task<bool> ExistsAsync(string pageId, string email)

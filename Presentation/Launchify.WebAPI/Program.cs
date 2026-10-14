@@ -13,7 +13,6 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Render / Cloudflare Proxy Header Desteði
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -42,13 +41,14 @@ else
     }
 }
 
-var projectId = builder.Configuration["Firebase:ProjectId"] ?? "masalimiz-2d8a4";
-builder.Services.AddSingleton(provider => FirestoreDb.Create(projectId));
+string projectId = builder.Configuration["Firebase:ProjectId"];
+builder.Services.AddSingleton(_ => FirestoreDb.Create(projectId));
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddMemoryCache();
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -92,7 +92,8 @@ builder.Services.AddCors(options =>
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowCredentials()
+            .WithExposedHeaders("X-Cache"); 
     });
 });
 
