@@ -16,26 +16,26 @@ Backend Web API for **Launchify**, an AI-powered SaaS platform that generates co
 ## 🏗️ System Architecture & Request Flow
 
 ```mermaid
-graph TD
-    Client[Next.js Client] -->|REST API| RateLimiter[Rate Limiting Middleware]
-    Client <-->|WebSockets / SSE| Hub[SignalR GenerationHub]
+flowchart TD
+    Client["Next.js Client"] -->|REST API| RateLimiter["Rate Limiting Middleware"]
+    Client <-->|WebSockets| Hub["SignalR GenerationHub"]
     
-    RateLimiter --> Controller[API Controllers]
-    Controller -->|Queries| Cache{IMemoryCache}
+    RateLimiter --> Controller["API Controllers"]
+    Controller -->|Queries| Cache{"IMemoryCache"}
     
-    Cache -->|Cache HIT < 2ms| Controller
-    Cache -->|Cache MISS| MediatR[MediatR / CQRS Pipeline]
+    Cache -->|Cache HIT - 2ms| Controller
+    Cache -->|Cache MISS| MediatR["MediatR & CQRS Pipeline"]
     
     Controller -->|Commands| MediatR
-    MediatR --> Validator[FluentValidation Behavior]
-    Validator --> Handlers[Command / Query Handlers]
+    MediatR --> Validator["FluentValidation Behavior"]
+    Validator --> Handlers["Command & Query Handlers"]
     
-    Handlers -->|Resilient HTTP + Fallback| Gemini[Google Gemini API]
-    Handlers -->|Singleton gRPC Channel| Firestore[(Firebase Firestore)]
+    Handlers -->|Multi-Model Fallback| Gemini["Google Gemini API"]
+    Handlers -->|Singleton gRPC Channel| Firestore[("Firebase Firestore")]
     
-    Controller -->|Non-Blocking Enqueue| Queue[AnalyticsQueueService]
-    Queue --> Worker[AnalyticsBackgroundWorker]
-    Worker -->|Batched Atomic Increment| Firestore
+    Controller -->|Non-Blocking Enqueue| Queue["AnalyticsQueueService"]
+    Queue --> Worker["AnalyticsBackgroundWorker"]
+    Worker -->|Atomic Increment| Firestore
 ```
 
 ---
