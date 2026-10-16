@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using Launchify.Application.Interfaces;
@@ -13,10 +14,12 @@ namespace Launchify.WebAPI.Controllers
     public class WaitlistController : ControllerBase
     {
         private readonly IWaitlistRepository _waitlistRepository;
+        private readonly ILandingPageRepository _pages;
 
-        public WaitlistController(IWaitlistRepository waitlistRepository)
+        public WaitlistController(IWaitlistRepository waitlistRepository, ILandingPageRepository pages)
         {
             _waitlistRepository = waitlistRepository;
+            _pages = pages;
         }
 
         [HttpPost]
@@ -54,6 +57,7 @@ namespace Launchify.WebAPI.Controllers
         }
 
         [HttpGet("{pageId}")]
+        [Authorize]
         public async Task<IActionResult> GetWaitlistByPageId(string pageId)
         {
             if (string.IsNullOrWhiteSpace(pageId))
@@ -61,6 +65,9 @@ namespace Launchify.WebAPI.Controllers
                 return BadRequest("PageId gereklidir.");
             }
 
+            var page = await _pages.GetByIdAsync(pageId);
+            if (page == null) return NotFound();
+            if (page.UserId != User.FindFirstValue(ClaimTypes.NameIdentifier)) return Forbid();
             var entries = await _waitlistRepository.GetByPageIdAsync(pageId);
             return Ok(entries);
         }

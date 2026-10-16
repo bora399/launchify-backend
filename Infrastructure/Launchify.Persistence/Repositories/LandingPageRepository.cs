@@ -1,4 +1,4 @@
-﻿using Google.Cloud.Firestore;
+using Google.Cloud.Firestore;
 using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
 using System;
@@ -119,6 +119,24 @@ namespace Launchify.Infrastructure.Repositories
         {
             var docRef = _firestoreDb.Collection("LandingPages").Document(id);
             await docRef.DeleteAsync();
+        }
+
+        public async Task<bool> DeleteOwnedAndRefundCreditAsync(string id, string userId)
+        {
+            var pageRef = _firestoreDb.Collection("LandingPages").Document(id);
+            var userRef = _firestoreDb.Collection("Users").Document(userId);
+            return await _firestoreDb.RunTransactionAsync(async transaction =>
+            {
+                var page = await transaction.GetSnapshotAsync(pageRef);
+                var user = await transaction.GetSnapshotAsync(userRef);
+                if (!page.Exists || !user.Exists || page.GetValue<string>("UserId") != userId)
+                    return false;
+
+                transaction.Delete(pageRef);
+                transaction.Update(userRef, "RemainingCredits",
+                    Math.Min(3, user.GetValue<int>("RemainingCredits") + 1));
+                return true;
+            });
         }
 
         public async Task UpdateAsync(LandingPage landingPage)

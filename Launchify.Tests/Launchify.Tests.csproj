@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -31,4 +31,8 @@
     <Folder Include="Domain\Entities\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Presentation\Launchify.WebAPI\Launchify.WebAPI.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 </Project>

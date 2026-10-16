@@ -1,9 +1,8 @@
-﻿using System.Threading.Tasks;
+using System.Security.Claims;
 
-namespace Launchify.Application.Interfaces
+namespace Launchify.Application.Interfaces;
+
+public interface IAuthService
 {
-    public interface IAuthService
-    {
-        Task<string> VerifyFirebaseTokenAsync(string idToken);
-    }
+    Task<ClaimsPrincipal> VerifyFirebaseTokenAsync(string idToken);
 }

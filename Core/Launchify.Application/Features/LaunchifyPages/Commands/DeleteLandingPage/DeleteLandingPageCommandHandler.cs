@@ -1,4 +1,4 @@
-﻿using Launchify.Application.Interfaces;
+using Launchify.Application.Interfaces;
 using MediatR;
 
 namespace Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPage
@@ -23,9 +23,9 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPa
                 return new DeleteLandingPageResponse { IsSuccess = false, Message = "Proje bulunamadı veya yetkiniz yok." };
             }
 
-            await _repository.DeleteAsync(request.PageId);
-
-            await _userRepository.RefundCreditAsync(request.UserId);
+            var deleted = await _repository.DeleteOwnedAndRefundCreditAsync(request.PageId, request.UserId);
+            if (!deleted)
+                return new DeleteLandingPageResponse { IsSuccess = false, Message = "Proje silinemedi veya zaten kaldırılmış." };
 
             return new DeleteLandingPageResponse { IsSuccess = true, Message = "Proje başarıyla kaldırıldı ve 1 kredi iade edildi." };
         }

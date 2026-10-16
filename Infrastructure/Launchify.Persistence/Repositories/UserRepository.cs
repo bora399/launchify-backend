@@ -2,89 +2,76 @@ using Google.Cloud.Firestore;
 using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
 
-namespace Launchify.Persistence.Repositories
+namespace Launchify.Persistence.Repositories;
+
+public class UserRepository(FirestoreDb firestoreDb) : IUserRepository
 {
-    public class UserRepository : IUserRepository
+    private static User MapUser(DocumentSnapshot snapshot) => new()
     {
-        private readonly FirestoreDb _firestoreDb;
+        Id = snapshot.Id,
+        Email = snapshot.GetValue<string>("Email"),
+        CreatedAt = snapshot.GetValue<DateTime>("CreatedAt"),
+        RemainingCredits = snapshot.GetValue<int>("RemainingCredits")
+    };
 
-        public UserRepository(FirestoreDb firestoreDb)
+    public async Task<User> GetByIdAsync(string id)
+    {
+        var snapshot = await firestoreDb.Collection("Users").Document(id).GetSnapshotAsync();
+        return snapshot.Exists ? MapUser(snapshot) : null!;
+    }
+
+    public async Task<User> SyncUserAsync(string id, string email)
+    {
+        var docRef = firestoreDb.Collection("Users").Document(id);
+        return await firestoreDb.RunTransactionAsync(async transaction =>
         {
-            _firestoreDb = firestoreDb;
-        }
+            var snapshot = await transaction.GetSnapshotAsync(docRef);
+            if (snapshot.Exists) return MapUser(snapshot);
 
-        public async Task<User> GetByIdAsync(string id)
-        {
-            var docRef = _firestoreDb.Collection("Users").Document(id);
-            var snapshot = await docRef.GetSnapshotAsync();
-
-            if (!snapshot.Exists) return null;
-
-            return new User
-            {
-                Id = snapshot.Id,
-                Email = snapshot.GetValue<string>("Email"),
-                CreatedAt = snapshot.GetValue<DateTime>("CreatedAt"),
-                RemainingCredits = snapshot.GetValue<int>("RemainingCredits")
-            };
-        }
-
-        public async Task<User> SyncUserAsync(string id, string email)
-        {
-            var docRef = _firestoreDb.Collection("Users").Document(id);
-            var snapshot = await docRef.GetSnapshotAsync();
-
-            if (snapshot.Exists)
-            {
-                return await GetByIdAsync(id);
-            }
-
-            var newUser = new User
+            var user = new User
             {
                 Id = id,
                 Email = email,
                 CreatedAt = DateTime.UtcNow,
                 RemainingCredits = 3
             };
-
-            var userData = new Dictionary<string, object>
+            transaction.Set(docRef, new Dictionary<string, object>
             {
-                { "Email", newUser.Email },
-                { "CreatedAt", newUser.CreatedAt.ToUniversalTime() },
-                { "RemainingCredits", newUser.RemainingCredits }
-            };
-
-            await docRef.SetAsync(userData);
-            return newUser;
-        }
-
-        public async Task<bool> DeductCreditAsync(string id)
-        {
-            var docRef = _firestoreDb.Collection("Users").Document(id);
-            return await _firestoreDb.RunTransactionAsync(async transaction =>
-            {
-                var snapshot = await transaction.GetSnapshotAsync(docRef);
-                if (!snapshot.Exists) return false;
-
-                int currentCredits = snapshot.GetValue<int>("RemainingCredits");
-                if (currentCredits <= 0) return false;
-
-                transaction.Update(docRef, "RemainingCredits", currentCredits - 1);
-                return true;
+                { "Email", user.Email },
+                { "CreatedAt", user.CreatedAt },
+                { "RemainingCredits", user.RemainingCredits }
             });
-        }
+            return user;
+        });
+    }
 
-        public async Task<bool> RefundCreditAsync(string id)
+    public async Task<bool> DeductCreditAsync(string id)
+    {
+        var docRef = firestoreDb.Collection("Users").Document(id);
+        return await firestoreDb.RunTransactionAsync(async transaction =>
         {
-            var docRef = _firestoreDb.Collection("Users").Document(id);
-            return await _firestoreDb.RunTransactionAsync(async transaction =>
-            {
-                var snapshot = await transaction.GetSnapshotAsync(docRef);
-                if (!snapshot.Exists) return false;
+            var snapshot = await transaction.GetSnapshotAsync(docRef);
+            if (!snapshot.Exists) return false;
 
-                transaction.Update(docRef, "RemainingCredits", FieldValue.Increment(1));
-                return true;
-            });
-        }
+            int credits = snapshot.GetValue<int>("RemainingCredits");
+            if (credits <= 0) return false;
+
+            transaction.Update(docRef, "RemainingCredits", credits - 1);
+            return true;
+        });
+    }
+
+    public async Task<bool> RefundCreditAsync(string id)
+    {
+        var docRef = firestoreDb.Collection("Users").Document(id);
+        return await firestoreDb.RunTransactionAsync(async transaction =>
+        {
+            var snapshot = await transaction.GetSnapshotAsync(docRef);
+            if (!snapshot.Exists) return false;
+
+            transaction.Update(docRef, "RemainingCredits",
+                Math.Min(3, snapshot.GetValue<int>("RemainingCredits") + 1));
+            return true;
+        });
     }
 }

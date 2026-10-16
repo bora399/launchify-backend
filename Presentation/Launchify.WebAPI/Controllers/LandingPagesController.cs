@@ -1,4 +1,4 @@
-﻿using Launchify.Application.DTOs;
+using Launchify.Application.DTOs;
 using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
 using Launchify.Application.Features.LaunchifyPages.Commands.DeleteLandingPage;
 using Launchify.Application.Interfaces;
@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
 using System;
+using System.Security.Claims;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -18,6 +19,7 @@ namespace Launchify.WebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class LandingPagesController(
         IMediator mediator,
         ILandingPageRepository repository,
@@ -50,11 +52,12 @@ namespace Launchify.WebAPI.Controllers
         [EnableRateLimiting("AiCreationLimit")]
         public async Task<IActionResult> CreateLandingPage([FromBody] CreateLandingPageCommand command)
         {
+            command.UserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             command.LogCallback = async (logMessage) =>
             {
                 if (!string.IsNullOrEmpty(command.ConnectionId))
                 {
-                    await hubContext.Clients.Client(command.ConnectionId).SendAsync("ReceiveLog", logMessage);
+                    await hubContext.Clients.User(command.UserId).SendAsync("ReceiveLog", logMessage);
                 }
             };
 
@@ -73,6 +76,7 @@ namespace Launchify.WebAPI.Controllers
         [HttpGet("user/{userId}")]
         public async Task<IActionResult> GetUserProjects(string userId)
         {
+            if (userId != User.FindFirstValue(ClaimTypes.NameIdentifier)) return Forbid();
             if (string.IsNullOrEmpty(userId))
             {
                 return BadRequest(new { message = "UserId parametresi gereklidir." });
@@ -99,9 +103,12 @@ namespace Launchify.WebAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteLandingPage(string id, [FromQuery] string userId)
+        public async Task<IActionResult> DeleteLandingPage(string id)
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var existingPage = await repository.GetByIdAsync(id);
+            if (existingPage == null) return NotFound();
+            if (existingPage.UserId != userId) return Forbid();
 
             var command = new DeleteLandingPageCommand { PageId = id, UserId = userId };
             var response = await mediator.Send(command);
@@ -191,6 +198,9 @@ namespace Launchify.WebAPI.Controllers
                     return NotFound(new { message = "Düzenlenecek proje bulunamadı." });
                 }
 
+                if (existingPage.UserId != User.FindFirstValue(ClaimTypes.NameIdentifier))
+                    return Forbid();
+
                 if (!string.IsNullOrWhiteSpace(request.ProductName))
                     existingPage.ProductName = request.ProductName;
 
@@ -223,12 +233,12 @@ namespace Launchify.WebAPI.Controllers
             catch (Exception ex)
             {
                 Console.WriteLine($"[GÜNCELLEME HATASI]: {ex.Message} \n {ex.StackTrace}");
-                return StatusCode(500, new { message = $"Sunucu hatası: {ex.Message}" });
+                return StatusCode(500, new { message = "Proje güncellenemedi. Lütfen tekrar deneyin." });
             }
         }
 
         [HttpPost("ai-assist")]
-        [AllowAnonymous]
+        [EnableRateLimiting("AiCreationLimit")]
         public async Task<IActionResult> AiAssist(
             [FromBody] AiAssistRequest request,
             [FromServices] IAiGeneratorService aiService)
@@ -254,8 +264,7 @@ namespace Launchify.WebAPI.Controllers
 
                 return StatusCode(500, new
                 {
-                    message = ex.Message,
-                    detail = ex.InnerException?.Message
+                    message = "AI asistanı şu anda yanıt veremiyor. Lütfen tekrar deneyin."
                 });
             }
         }

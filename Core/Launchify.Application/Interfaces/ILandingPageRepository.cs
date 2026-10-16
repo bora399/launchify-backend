@@ -1,4 +1,4 @@
-﻿using Launchify.Domain.Entities;
+using Launchify.Domain.Entities;
 using System.Threading.Tasks;
 
 namespace Launchify.Application.Interfaces
@@ -12,5 +12,6 @@ namespace Launchify.Application.Interfaces
         Task IncrementVisitCountAsync(string pageId, int visitCount);
         Task UpdateAsync(LandingPage landingPage);
         Task DeleteAsync(string id);
+        Task<bool> DeleteOwnedAndRefundCreditAsync(string id, string userId);
     }
 }

@@ -1,3 +1,9 @@
+using FirebaseAdmin;
+using FirebaseAdmin.Auth;
+using Google.Apis.Auth.OAuth2;
+using Launchify.WebAPI.Authentication;
+using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
 using FluentValidation;
 using Google.Cloud.Firestore;
 using Launchify.API.Middlewares;
@@ -37,13 +43,24 @@ else
     }
     else
     {
-        Console.WriteLine("UYARI: Firebase kimliði bulunamadý! Veritabaný iþlemleri baþarýsýz olabilir.");
+        Console.WriteLine("UYARI: Firebase kimliï¿½i bulunamadï¿½! Veritabanï¿½ iï¿½lemleri baï¿½arï¿½sï¿½z olabilir.");
     }
 }
 
 string projectId = builder.Configuration["Firebase:ProjectId"];
 builder.Services.AddSingleton(_ => FirestoreDb.Create(projectId));
 
+builder.Services.AddSingleton(_ => FirebaseApp.DefaultInstance ?? FirebaseApp.Create(new AppOptions
+{
+    Credential = GoogleCredential.GetApplicationDefault(),
+    ProjectId = projectId
+}));
+builder.Services.AddSingleton(provider => FirebaseAuth.GetAuth(provider.GetRequiredService<FirebaseApp>()));
+builder.Services.AddScoped<IAuthService, FirebaseAuthService>();
+builder.Services.AddAuthentication(FirebaseAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, FirebaseAuthenticationHandler>(
+        FirebaseAuthenticationHandler.SchemeName, _ => { });
+builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
@@ -57,10 +74,9 @@ builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("AiCreationLimit", httpContext =>
     {
-        string partitionKey = httpContext.Request.Headers["X-User-Id"].FirstOrDefault()
-                              ?? httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim()
+        string partitionKey = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
                               ?? httpContext.Connection.RemoteIpAddress?.ToString()
-                              ?? Guid.NewGuid().ToString();
+                              ?? "anonymous";
 
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: partitionKey,
@@ -78,7 +94,7 @@ builder.Services.AddRateLimiter(options =>
     {
         context.HttpContext.Response.StatusCode = 429;
         context.HttpContext.Response.ContentType = "application/json";
-        await context.HttpContext.Response.WriteAsync("{\"message\": \"Saatlik oluþturma sýnýrýna ulaþýldý. Lütfen biraz bekleyin.\"}", token);
+        await context.HttpContext.Response.WriteAsync("{\"message\": \"Saatlik oluï¿½turma sï¿½nï¿½rï¿½na ulaï¿½ï¿½ldï¿½. Lï¿½tfen biraz bekleyin.\"}", token);
     };
 });
 
@@ -125,9 +141,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowAll");
 
-app.UseRateLimiter();
-
+app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<GenerationHub>("/generationHub");
