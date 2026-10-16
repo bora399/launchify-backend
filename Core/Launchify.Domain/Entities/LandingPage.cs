@@ -7,8 +7,8 @@ namespace Launchify.Domain.Entities
     {
         public string UserId { get; set; }
         public string ProductName { get; set; }
-        public string ContactEmail { get; set; }
-        public string DemoLink { get; set; }
+        public string? ContactEmail { get; set; }
+        public string? DemoLink { get; set; }
         public string ProductDescription { get; set; }
         public AiPageConfig AiConfig { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

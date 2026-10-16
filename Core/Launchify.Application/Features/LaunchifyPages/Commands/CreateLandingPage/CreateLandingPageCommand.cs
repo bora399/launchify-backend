@@ -9,8 +9,8 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
         public string UserId { get; set; }
         public string ProductName { get; set; }
         public string ThemeType { get; set; }
-        public string ContactEmail { get; set; }
-        public string DemoLink { get; set; }
+        public string? ContactEmail { get; set; }
+        public string? DemoLink { get; set; }
         public string ProductDescription { get; set; }
         public string TemplateType { get; set; }
         //signalr

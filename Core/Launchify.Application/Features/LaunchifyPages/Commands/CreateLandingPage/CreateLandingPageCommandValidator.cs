@@ -14,15 +14,15 @@ public class CreateLandingPageCommandValidator : AbstractValidator<CreateLanding
             .MaximumLength(1000).WithMessage("AI brief'i en fazla 1000 karakter olabilir.");
 
         RuleFor(p => p.ContactEmail)
-            .NotEmpty().WithMessage("E-Posta zorunludur.")
             .EmailAddress().WithMessage("Geçerli bir e-posta girin.")
-            .MaximumLength(100);
+            .MaximumLength(100)
+            .When(p => !string.IsNullOrWhiteSpace(p.ContactEmail));
 
         RuleFor(p => p.DemoLink)
             .MaximumLength(255)
             .Must(uri => Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
                 && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
-            .When(p => !string.IsNullOrEmpty(p.DemoLink))
+            .When(p => !string.IsNullOrWhiteSpace(p.DemoLink))
             .WithMessage("Geçerli bir URL girin.");
     }
 }
