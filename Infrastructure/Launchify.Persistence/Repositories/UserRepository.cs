@@ -1,4 +1,4 @@
-﻿using Google.Cloud.Firestore;
+using Google.Cloud.Firestore;
 using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
 
@@ -61,29 +61,30 @@ namespace Launchify.Persistence.Repositories
         public async Task<bool> DeductCreditAsync(string id)
         {
             var docRef = _firestoreDb.Collection("Users").Document(id);
-            var snapshot = await docRef.GetSnapshotAsync();
+            return await _firestoreDb.RunTransactionAsync(async transaction =>
+            {
+                var snapshot = await transaction.GetSnapshotAsync(docRef);
+                if (!snapshot.Exists) return false;
 
-            if (!snapshot.Exists) return false;
+                int currentCredits = snapshot.GetValue<int>("RemainingCredits");
+                if (currentCredits <= 0) return false;
 
-            int currentCredits = snapshot.GetValue<int>("RemainingCredits");
-
-            if (currentCredits <= 0) return false;
-
-            await docRef.UpdateAsync("RemainingCredits", currentCredits - 1);
-            return true;
+                transaction.Update(docRef, "RemainingCredits", currentCredits - 1);
+                return true;
+            });
         }
 
         public async Task<bool> RefundCreditAsync(string id)
         {
             var docRef = _firestoreDb.Collection("Users").Document(id);
-            var snapshot = await docRef.GetSnapshotAsync();
+            return await _firestoreDb.RunTransactionAsync(async transaction =>
+            {
+                var snapshot = await transaction.GetSnapshotAsync(docRef);
+                if (!snapshot.Exists) return false;
 
-            if (!snapshot.Exists) return false;
-
-            int currentCredits = snapshot.GetValue<int>("RemainingCredits");
-
-            await docRef.UpdateAsync("RemainingCredits", currentCredits + 1);
-            return true;
+                transaction.Update(docRef, "RemainingCredits", FieldValue.Increment(1));
+                return true;
+            });
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using Launchify.Application.Common.Utils;
+using Launchify.Application.Common.Utils;
 using Launchify.Application.Interfaces;
 using Launchify.Domain.Entities;
 using MediatR;
@@ -45,19 +45,6 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                 }
 
                 creditDeducted = await _userRepository.DeductCreditAsync(request.UserId);
-
-                if (!creditDeducted)
-                {
-                    var existingPages = await _repository.GetByUserIdAsync(request.UserId);
-                    int count = existingPages != null ? existingPages.Count() : 0;
-
-                    if (count < 3)
-                    {
-                        _logger.LogInformation("Kullanıcı ({UserId}) 3'ten az projeye sahip ({Count}/3) fakat kredisi 0. Otomatik telafi ediliyor...", request.UserId, count);
-                        await _userRepository.RefundCreditAsync(request.UserId);
-                        creditDeducted = await _userRepository.DeductCreditAsync(request.UserId);
-                    }
-                }
 
                 if (!creditDeducted)
                 {
@@ -124,7 +111,7 @@ namespace Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPa
                 return new CreateLandingResponse
                 {
                     IsSuccess = false,
-                    Message = "Platform oluşturulurken sunucu kaynaklı bir sorun meydana geldi: " + ex.Message
+                    Message = "Platform oluşturulurken sunucu kaynaklı bir sorun meydana geldi. Lütfen daha sonra tekrar deneyin."
                 };
             }
         }

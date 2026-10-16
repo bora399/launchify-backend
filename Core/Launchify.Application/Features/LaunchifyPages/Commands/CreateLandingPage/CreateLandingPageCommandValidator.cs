@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using Launchify.Application.Features.LaunchifyPages.Commands.CreateLandingPage;
 
 public class CreateLandingPageCommandValidator : AbstractValidator<CreateLandingPageCommand>
@@ -20,7 +20,8 @@ public class CreateLandingPageCommandValidator : AbstractValidator<CreateLanding
 
         RuleFor(p => p.DemoLink)
             .MaximumLength(255)
-            .Must(uri => Uri.TryCreate(uri, UriKind.Absolute, out _))
+            .Must(uri => Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
+                && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
             .When(p => !string.IsNullOrEmpty(p.DemoLink))
             .WithMessage("Geçerli bir URL girin.");
     }
