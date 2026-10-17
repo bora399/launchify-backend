@@ -1,124 +1,106 @@
-# Launchify — Backend API (.NET Core)
+# Launchify · Backend API
 
-![.NET](https://img.shields.io/badge/.NET%208.0-512BD4?style=flat-square&logo=dotnet&logoColor=white)
-![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2B%20CQRS-blue?style=flat-square)
-![Database](https://img.shields.io/badge/Firestore-FFCA28?style=flat-square&logo=firebase&logoColor=black)
-![SignalR](https://img.shields.io/badge/Real--Time-SignalR-008272?style=flat-square)
-![Deployment](https://img.shields.io/badge/Deployed%20on-Render-46E3B7?style=flat-square&logo=render&logoColor=black)
+**AI-assisted landing pages, with authenticated project management and asynchronous visit tracking.**
 
-Backend Web API for **Launchify**, an AI-powered SaaS platform that generates conversion-focused landing pages and manages early-access waitlists. Built with **C# / ASP.NET Core** following **Clean Architecture** and **CQRS** principles.
+ASP.NET Core 8 · C# · Firestore · Firebase Auth · MediatR · FluentValidation · SignalR
 
-🔗 **Live Frontend:** [launchify-frontend-theta.vercel.app](https://launchify-frontend-theta.vercel.app)  
-🔗 **Frontend Repository:** [github.com/bora399/launchify-frontend](https://github.com/bora399/launchify-frontend)
+[Frontend source](https://github.com/bora399/launchify-frontend) · [Demo URL](https://launchify-frontend-theta.vercel.app) · [Authentication notes](AUTHENTICATION.md)
 
----
+## What it does
 
-## 🏗️ System Architecture & Request Flow
+Launchify turns a product brief into a landing-page configuration. The API coordinates AI generation, stores pages, manages generation credits, accepts waitlist signups, and records visits. The companion Next.js client renders and edits the pages.
+
+## Start your code review here
+
+| Question | Implementation |
+| --- | --- |
+| Who can access a project? | [Firebase authentication handler](Presentation/Launchify.WebAPI/Authentication/FirebaseAuthenticationHandler.cs), [controller ownership checks](Presentation/Launchify.WebAPI/Controllers/LandingPagesController.cs) |
+| What happens if AI generation fails? | [Credit reservation and compensating refund](Core/Launchify.Application/Features/LaunchifyPages/Commands/CreateLandingPage/CreateLandingPageCommandHandler.cs) |
+| How are competing credit updates handled? | [Firestore user transactions](Infrastructure/Launchify.Persistence/Repositories/UserRepository.cs), [owned deletion and refund](Infrastructure/Launchify.Persistence/Repositories/LandingPageRepository.cs) |
+| How are repeated reads served? | [Cache-aside reads, expiration and mutation invalidation](Presentation/Launchify.WebAPI/Controllers/LandingPagesController.cs) |
+| How are visits processed? | [In-process channel](Infrastructure/Launchify.Infrastructure/Services/AnalyticsQueueService.cs), [background worker](Infrastructure/Launchify.Infrastructure/Services/AnalyticsWorker.cs) |
+| What is tested? | [HTTP authorization](Launchify.Tests/Security/ApiAuthorizationTests.cs), [generation safety](Launchify.Tests/Application/CreateLandingPageSafetyTests.cs), [queries](Launchify.Tests/Application/LandingPageQueryTests.cs) |
+
+## Architecture
 
 ```mermaid
 flowchart TD
-    Client["Next.js Client"] -->|REST API| RateLimiter["Rate Limiting Middleware"]
-    Client <-->|WebSockets| Hub["SignalR GenerationHub"]
-    
-    RateLimiter --> Controller["API Controllers"]
-    Controller -->|Queries| Cache{"IMemoryCache"}
-    
-    Cache -->|Cache HIT - 2ms| Controller
-    Cache -->|Cache MISS| MediatR["MediatR & CQRS Pipeline"]
-    
-    Controller -->|Commands| MediatR
-    MediatR --> Validator["FluentValidation Behavior"]
-    Validator --> Handlers["Command & Query Handlers"]
-    
-    Handlers -->|Multi-Model Fallback| Gemini["Google Gemini API"]
-    Handlers -->|Singleton gRPC Channel| Firestore[("Firebase Firestore")]
-    
-    Controller -->|Non-Blocking Enqueue| Queue["AnalyticsQueueService"]
-    Queue --> Worker["AnalyticsBackgroundWorker"]
-    Worker -->|Atomic Increment| Firestore
+    Client["Next.js client"] --> API["ASP.NET Core API"]
+    API --> Auth["Firebase token verification"]
+    API --> Commands["MediatR commands and validation"]
+    Commands --> AI["Gemini service"]
+    Commands --> Store["Firestore repositories"]
+    API --> Cache["In-memory read cache"]
+    API --> Queue["Visit channel"]
+    Queue --> Worker["Analytics worker"]
+    Worker --> Store
+    API --> Hub["SignalR progress updates"]
+    Hub --> Client
 ```
 
----
+The solution separates domain entities, application commands/interfaces, infrastructure services, persistence, and HTTP presentation. Commands use MediatR; several reads and updates are handled directly by controllers. The database is **Firestore**, not EF Core.
 
-## ⚙️ Key Engineering Highlights
+## Engineering decisions
 
-Rather than a basic CRUD API, this service implements production-grade backend patterns to handle latency, third-party API unreliability, and database cost optimization:
+- **Server-derived identity:** private endpoints use verified Firebase claims. A client-provided user ID does not grant access to another user's projects.
+- **Credit reservation:** generation deducts a credit before the upstream AI request, then attempts compensation on failure. This is a multi-step workflow, not a transaction spanning the AI provider and database.
+- **Cache-aside reads:** public pages and user lists are cached with expiration. Mutations invalidate the corresponding local cache keys; `X-Cache` exposes hit/miss behavior.
+- **Background analytics:** visits enter a process-local channel. This reduces work in the request path, but does not provide durable delivery across restarts.
+- **Progress delivery:** SignalR sends generation logs to the authenticated user.
 
-### 1. Clean Architecture & CQRS (`MediatR` + `FluentValidation`)
-* **Strict Separation of Concerns:** Divided into `Domain`, `Application`, `Infrastructure`, `Persistence`, and `WebAPI` layers.
-* **Pipeline Validation:** Request payloads are validated automatically via `ValidationBehavior<TRequest, TResponse>` before reaching business logic, handled centrally by `GlobalExceptionHandler`.
+## API overview
 
-### 2. Cache-Aside Pattern & Deterministic Cache Invalidation (`IMemoryCache`)
-* **Read Optimization:** Public landing pages (`GET /api/LandingPages/{slug}`) and user project lists (`GET /api/LandingPages/user/{userId}`) are read-heavy. Responses are cached in memory with sliding and absolute expiration policies, reducing response times from ~250ms to **<2ms**.
-* **Observability:** Responses expose `X-Cache: HIT` or `X-Cache: MISS` HTTP headers.
-* **Explicit Invalidation:** Any state mutation (`POST`, `PUT`, `DELETE`) triggers deterministic cache eviction for both the specific slug and the owner's project list to prevent stale reads.
+| Method | Route | Access |
+| --- | --- | --- |
+| POST | `/api/LandingPages/create` | Authenticated; generation rate limit |
+| GET | `/api/LandingPages/user/{userId}` | Matching authenticated user |
+| GET | `/api/LandingPages/{slug}` | Public |
+| PUT / DELETE | `/api/LandingPages/{id}` | Project owner |
+| POST | `/api/LandingPages/ai-assist` | Authenticated; generation rate limit |
+| POST | `/api/Waitlist` | Public signup |
+| GET | `/api/Waitlist/{pageId}` | Project owner |
+| POST | `/api/Analytics/{pageId}/visit` | Public visit tracking |
+| GET | `/api/LandingPages/ping` | Public |
 
-### 3. Asynchronous Background Processing (`IHostedService`)
-* **Non-Blocking Analytics:** Page view increments are decoupled from the HTTP request thread. Incoming traffic metrics are pushed to a singleton `AnalyticsQueueService` and processed asynchronously in the background by `AnalyticsBackgroundWorker` using Firestore atomic increments (`FieldValue.Increment`).
+Waitlist signup normalizes email and checks for an existing entry. The check and write are separate operations; this is not an atomic uniqueness guarantee.
 
-### 4. Resilient LLM Integration (`GeminiAiService`)
-* **Multi-Model Fallback & Retry Policy:** Implements a fallback chain across multiple Gemini models with exponential backoff on `429 Too Many Requests` and `503 Service Unavailable` responses.
-* **Credit Protection & Rollback:** User generation credits are only deducted upon verified persistence, ensuring failed upstream AI calls never penalize the user.
-* **Output Sanitization:** Enforces `application/json` MIME types combined with deterministic bracket extraction to prevent malformed LLM markdown responses from breaking deserialization.
+## Run locally
 
-### 5. Real-Time Generation Telemetry (`SignalR`)
-* Streams step-by-step generation stages (`[Step 1/4]` through `[Step 4/4]`) directly to the client's `ConnectionId` over `GenerationHub`, providing live feedback during long-running AI tasks.
+Requirements: .NET 8 SDK, your own Firebase project with Firestore, Firebase service-account credentials, and a Gemini API key.
 
-### 6. Security, Rate Limiting & Bot Mitigation
-* **IP & User Partitioned Rate Limiting:** Built-in `.NET RateLimiter` (`FixedWindowLimiter`) protects AI generation endpoints from abuse using `X-User-Id` and `X-Forwarded-For` headers behind reverse proxies.
-* **Silent Honeypot Trap:** Waitlist endpoints inspect a hidden honeypot field; automated spam bots receive a silent `200 OK` without triggering database writes.
-* **Idempotent Lead Capture:** Emails are normalized and checked against composite (`PageId` + `Email`) existence queries, returning `409 Conflict` on duplicate submissions.
-* **Singleton gRPC Reuse:** `FirestoreDb` is registered as a singleton instance to reuse the underlying gRPC channel and avoid repeated SSL/OAuth handshakes.
-
----
-
-## 📡 Core API Endpoints
-
-| Method | Endpoint | Description | Auth / Policy |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/api/LandingPages/create` | Generates a new AI landing page & streams logs via SignalR | `AiCreationLimit` |
-| `GET` | `/api/LandingPages/{slug}` | Retrieves public landing page config (`X-Cache: HIT/MISS`) | `AllowAnonymous` |
-| `GET` | `/api/LandingPages/user/{userId}` | Lists all projects belonging to a user (Cached) | User Scoped |
-| `PUT` | `/api/LandingPages/{id}` | Updates page content/theme & invalidates cache | User Scoped |
-| `DELETE` | `/api/LandingPages/{id}` | Deletes project, refunds 1 user credit & invalidates cache | User Scoped |
-| `POST` | `/api/LandingPages/ai-assist` | Live AI copywriting & tone transformation (`punchy`, `corporate`, `minimal`, `redesign`) | `AllowAnonymous` |
-| `POST` | `/api/Waitlist` | Captures lead with Honeypot bot filtering & `409` duplicate check | `AllowAnonymous` |
-| `GET` | `/api/Waitlist/{pageId}` | Returns collected waitlist leads ordered by timestamp | User Scoped |
-| `POST` | `/api/Analytics/track` | Enqueues non-blocking page view events to background worker | `AllowAnonymous` |
-| `GET` | `/api/LandingPages/ping` | Lightweight health-check endpoint for container pre-warming | `AllowAnonymous` |
-
----
-
-## 🚀 Local Development Setup
-
-### Prerequisites
-* .NET 8.0 SDK
-* Firebase Project with Firestore enabled (`firebase-key.json`)
-* Google Gemini API Key
-
-### 1. Clone the repository
 ```bash
-git clone [https://github.com/bora399/launchify-backend.git](https://github.com/bora399/launchify-backend.git)
+git clone https://github.com/bora399/launchify-backend.git
 cd launchify-backend
+dotnet restore Launchify.sln
 ```
 
-### 2. Configure Environment Variables
-Place your `firebase-key.json` in the API root directory (or set the `FIREBASE_JSON` environment variable) and configure `appsettings.Development.json`:
+Set configuration in the shell that runs the API. PowerShell example:
 
-```json
-{
-  "Firebase": {
-    "ProjectId": "your-firebase-project-id"
-  },
-  "Gemini": {
-    "ApiKey": "your-gemini-api-key"
-  }
-}
+```powershell
+$env:Firebase__ProjectId = "your-firebase-project-id"
+$env:Gemini__ApiKey = "your-gemini-api-key"
+$env:FIREBASE_JSON = Get-Content -Raw "C:\credentials\firebase-service-account.json"
+dotnet run --project Presentation/Launchify.WebAPI/Launchify.WebAPI.csproj --launch-profile http
 ```
 
-### 3. Run the API
+Use a credential file outside the repository. Do not commit credentials. The existing bootstrap also recognizes a local `firebase-key.json`; `FIREBASE_JSON` takes precedence.
+
+The checked-in HTTP launch profile uses `http://localhost:5125`; Swagger is at `http://localhost:5125/swagger`. Set the frontend's `NEXT_PUBLIC_API_URL` to this base URL. Firebase project IDs must match on both sides. CORS currently allows `http://localhost:3000` and the configured Vercel origin.
+
+## Tests
+
 ```bash
-dotnet restore
-dotnet run --project Launchify.WebAPI
+dotnet test Launchify.Tests/Launchify.Tests.csproj
 ```
-Swagger UI will be available at `http://localhost:5000/swagger`.
+
+The repository includes xUnit tests for authorization, generation failure handling, queries, and analytics. HTTP authorization tests replace external services with test doubles. These do not establish live Firebase/Firestore correctness or measured production performance.
+
+## Current boundaries and next steps
+
+- Reserve unique slugs atomically and make page creation idempotent.
+- Make analytics batching, retry and shutdown behavior reliable; use durable delivery when needed.
+- Make waitlist uniqueness atomic and validate the target page.
+- Scope forwarded-header trust to the deployment's actual proxies.
+- Add Firestore integration tests and reproducible load measurements before making latency claims.
+
+See [AUTHENTICATION.md](AUTHENTICATION.md) for the newer authentication work. [PROJECT_REVIEW.md](PROJECT_REVIEW.md) is a historical review; some findings have since been addressed.
